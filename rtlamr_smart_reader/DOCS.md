@@ -19,8 +19,8 @@ The add-on ships with placeholder meter configuration. Replace `id: 0` with your
 
 - Default protocol: `scm`
 - Lock center: `911000000`
-- Sample rate: `524288`
-- Symbol length: `16`
+- Sample rate: `262144`
+- Symbol length: `8`
 - Gain: `40.2`
 
 Edit `meters:` in the add-on options for the exact meters you want to track. Remove any placeholder or candidate ID that never appears in the logs, otherwise the reader will keep scanning for it.
@@ -125,11 +125,11 @@ The `lock_sample_rate` and `lock_symbol_length` settings should be kept as a mat
 - `524288` sample rate with symbol length `16`
 - `1048576` sample rate with symbol length `32`
 
-If you see repeated `not keeping up with rtl_tcp` messages, the VM is falling behind the SDR stream. Use `524288`/`16` or `262144`/`8`. The add-on also restarts the receiver after `overload_restart_threshold` repeated overload warnings in one session.
+If you see repeated `not keeping up with rtl_tcp` messages, compare the reported `rate=` to `lock_sample_rate`. A warning near the target rate, such as `260096` when configured for `262144`, is usually harmless. A much lower rate, such as half the target, means the VM is falling behind the SDR stream. The add-on counts only severe overloads, controlled by `overload_min_rate_ratio`, and restarts the receiver after `overload_restart_threshold` severe warnings in one session.
 
 `[R82XX] PLL not locked!` is common during tuner startup or retune. Occasional messages are not a problem by themselves.
 
-If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually set `lock_sample_rate: 524288` and `lock_symbol_length: 16` if it still shows the older `1048576`/`32` pair.
+If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually set `lock_sample_rate: 262144` and `lock_symbol_length: 8` if it still shows the older `1048576`/`32` or `524288`/`16` pair.
 
 ## Troubleshooting
 

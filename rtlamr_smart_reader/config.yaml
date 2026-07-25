@@ -1,5 +1,5 @@
 name: "RTLAMR Smart Reader"
-version: "0.2.1"
+version: "0.2.2"
 slug: "rtlamr_smart_reader"
 description: "Adaptive RTL-SDR reader for multiple Itron ERT utility meters with MQTT discovery and local sampling."
 url: "https://github.com/padiauj/rtlamr-smart-reader"
@@ -30,10 +30,11 @@ options:
       min_confirmations: 2
       confirmation_window_seconds: 90
   lock_center_hz: 911000000
-  lock_sample_rate: 524288
-  lock_symbol_length: 16
+  lock_sample_rate: 262144
+  lock_symbol_length: 8
   tuner_gain: 40.2
   overload_restart_threshold: 3
+  overload_min_rate_ratio: 0.85
   stale_seconds: 300
   lock_restart_seconds: 3600
   scan_seconds: 45
@@ -81,6 +82,7 @@ schema:
   lock_symbol_length: int
   tuner_gain: float
   overload_restart_threshold: int
+  overload_min_rate_ratio: float
   stale_seconds: int
   lock_restart_seconds: int
   scan_seconds: int

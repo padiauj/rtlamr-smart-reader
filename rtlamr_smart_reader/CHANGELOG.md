@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Changed new-install defaults to the lower-CPU `262144` samples/second profile with symbol length `8`.
+- Added rate-aware overload classification so near-target `rtlamr` catch-up warnings do not trigger restarts.
+- Added `overload_min_rate_ratio` to tune severe overload detection.
+
 ## 0.2.1
 
 - Lowered the default receiver profile to `524288` samples/second with symbol length `16` for Home Assistant VMs.

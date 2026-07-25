@@ -29,8 +29,8 @@ New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
 $summaryPath = Join-Path $runDir "summary.csv"
 $metaPath = Join-Path $logDir "current_rtlamr_sweep.json"
-$sampleRate = 524288
-$symbolLength = 16
+$sampleRate = 262144
+$symbolLength = 8
 
 $centers = for ($mhz = $StartMHz + 0.5; $mhz -lt $EndMHz; $mhz += $StepMHz) {
     [int64]($mhz * 1000000)

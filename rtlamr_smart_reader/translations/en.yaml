@@ -32,6 +32,9 @@ configuration:
   overload_restart_threshold:
     name: Overload restart threshold
     description: Restart the receiver after this many rtlamr not-keeping-up warnings in one session. Use 0 to disable.
+  overload_min_rate_ratio:
+    name: Overload minimum rate ratio
+    description: Count an rtlamr not-keeping-up warning as severe only below this fraction of the configured sample rate.
   sample_interval_seconds:
     name: Sample interval
     description: Seconds between retained SQLite samples and MQTT sample publishes.

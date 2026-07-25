@@ -119,6 +119,7 @@ class Config:
     lock_symbol_length: int
     tuner_gain: float
     overload_restart_threshold: int
+    overload_min_rate_ratio: float
     stale_seconds: int
     lock_restart_seconds: int
     scan_seconds: int
@@ -211,10 +212,11 @@ class Config:
         return cls(
             meters=meters,
             lock_center_hz=lock_center,
-            lock_sample_rate=int(options.get("lock_sample_rate", 524288)),
-            lock_symbol_length=int(options.get("lock_symbol_length", 16)),
+            lock_sample_rate=int(options.get("lock_sample_rate", 262144)),
+            lock_symbol_length=int(options.get("lock_symbol_length", 8)),
             tuner_gain=float(options.get("tuner_gain", 40.2)),
             overload_restart_threshold=int(options.get("overload_restart_threshold", 3)),
+            overload_min_rate_ratio=float(options.get("overload_min_rate_ratio", 0.85)),
             stale_seconds=int(options.get("stale_seconds", 300)),
             lock_restart_seconds=int(options.get("lock_restart_seconds", 3600)),
             scan_seconds=int(options.get("scan_seconds", 45)),
@@ -987,9 +989,13 @@ class SmartReader:
                         readings_by_meter[meter_id] = reading
                 else:
                     if "not keeping up with rtl_tcp" in line:
-                        overload_errors += 1
-                        self.log_process_line(source, line)
-                        if (
+                        severe = self.is_severe_overload(line)
+                        if severe:
+                            overload_errors += 1
+                        else:
+                            overload_errors = 0
+                        self.log_overload_line(source, line, severe, overload_errors)
+                        if severe and (
                             self.config.overload_restart_threshold > 0
                             and overload_errors >= self.config.overload_restart_threshold
                         ):
@@ -1119,6 +1125,43 @@ class SmartReader:
             runtime.pending_count = 1
             runtime.pending_first_seen = now
         return runtime.pending_count >= meter_config.min_confirmations
+
+    def overload_rate_from_line(self, line: str) -> int | None:
+        match = re.search(r"\brate=(\d+)\b", line)
+        if not match:
+            return None
+        return int(match.group(1))
+
+    def is_severe_overload(self, line: str) -> bool:
+        reported_rate = self.overload_rate_from_line(line)
+        if reported_rate is None:
+            return True
+        minimum_rate = self.config.lock_sample_rate * self.config.overload_min_rate_ratio
+        return reported_rate < minimum_rate
+
+    def log_overload_line(self, source: str, line: str, severe: bool, count: int) -> None:
+        reported_rate = self.overload_rate_from_line(line)
+        if reported_rate is None:
+            logging.warning("%s: rtlamr overload warning without rate: %s", source, line)
+            return
+        ratio = reported_rate / max(self.config.lock_sample_rate, 1)
+        if severe:
+            logging.warning(
+                "%s: severe rtlamr overload rate=%s target=%s ratio=%.2f count=%s",
+                source,
+                reported_rate,
+                self.config.lock_sample_rate,
+                ratio,
+                count,
+            )
+            return
+        logging.debug(
+            "%s: mild rtlamr catch-up warning rate=%s target=%s ratio=%.2f",
+            source,
+            reported_rate,
+            self.config.lock_sample_rate,
+            ratio,
+        )
 
     def validate_reading(
         self,
