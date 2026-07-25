@@ -29,6 +29,9 @@ configuration:
   tuner_gain:
     name: Tuner gain
     description: RTL-SDR tuner gain in dB.
+  overload_restart_threshold:
+    name: Overload restart threshold
+    description: Restart the receiver after this many rtlamr not-keeping-up warnings in one session. Use 0 to disable.
   sample_interval_seconds:
     name: Sample interval
     description: Seconds between retained SQLite samples and MQTT sample publishes.

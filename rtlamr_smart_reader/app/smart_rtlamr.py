@@ -118,6 +118,7 @@ class Config:
     lock_sample_rate: int
     lock_symbol_length: int
     tuner_gain: float
+    overload_restart_threshold: int
     stale_seconds: int
     lock_restart_seconds: int
     scan_seconds: int
@@ -210,9 +211,10 @@ class Config:
         return cls(
             meters=meters,
             lock_center_hz=lock_center,
-            lock_sample_rate=int(options.get("lock_sample_rate", 1048576)),
-            lock_symbol_length=int(options.get("lock_symbol_length", 32)),
+            lock_sample_rate=int(options.get("lock_sample_rate", 524288)),
+            lock_symbol_length=int(options.get("lock_symbol_length", 16)),
             tuner_gain=float(options.get("tuner_gain", 40.2)),
+            overload_restart_threshold=int(options.get("overload_restart_threshold", 3)),
             stale_seconds=int(options.get("stale_seconds", 300)),
             lock_restart_seconds=int(options.get("lock_restart_seconds", 3600)),
             scan_seconds=int(options.get("scan_seconds", 45)),
@@ -950,6 +952,7 @@ class SmartReader:
         hits_by_meter: dict[int, int] = {meter_id: 0 for meter_id in self.config.meter_ids}
         readings_by_meter: dict[int, float | None] = {meter_id: None for meter_id in self.config.meter_ids}
         wanted = set(stale_meter_ids or [])
+        overload_errors = 0
         self.state.current_center_hz = center_hz
         self.publish_samples(force=True)
 
@@ -983,6 +986,19 @@ class SmartReader:
                         hits_by_meter[meter_id] += 1
                         readings_by_meter[meter_id] = reading
                 else:
+                    if "not keeping up with rtl_tcp" in line:
+                        overload_errors += 1
+                        self.log_process_line(source, line)
+                        if (
+                            self.config.overload_restart_threshold > 0
+                            and overload_errors >= self.config.overload_restart_threshold
+                        ):
+                            logging.warning(
+                                "Restarting receiver after %s rtl_tcp overload warning(s)",
+                                overload_errors,
+                            )
+                            return "overload"
+                        continue
                     self.log_process_line(source, line)
         finally:
             elapsed = max(0.1, time.time() - start)

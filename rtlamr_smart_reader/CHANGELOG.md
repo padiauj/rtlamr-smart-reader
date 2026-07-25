@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Lowered the default receiver profile to `524288` samples/second with symbol length `16` for Home Assistant VMs.
+- Added receiver restart after repeated `rtlamr` overload warnings.
+- Documented `not keeping up with rtl_tcp` and tuner PLL startup messages.
+
 ## 0.2.0
 
 - Added multiple configured meters.
