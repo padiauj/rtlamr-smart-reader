@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+- Changed the default lock center to `910.5 MHz` and scan order to try `910.5 MHz` and `911.5 MHz` before `911.0 MHz`.
+- Honor the configured lock center on startup instead of reusing a stale saved center.
+- Start with scan mode when configured meters have never been seen.
+- Removed the experimental add-on stage flag.
+
 ## 0.2.2
 
 - Changed new-install defaults to the lower-CPU `262144` samples/second profile with symbol length `8`.

@@ -18,7 +18,7 @@ It starts in lock mode at `911.0 MHz`. If any configured meter goes quiet for `s
 The add-on ships with placeholder meter configuration. Replace `id: 0` with your own ERT endpoint IDs before starting it.
 
 - Default protocol: `scm`
-- Lock center: `911000000`
+- Lock center: `910500000`
 - Sample rate: `262144`
 - Symbol length: `8`
 - Gain: `40.2`
@@ -119,6 +119,8 @@ The C1SR/R300 meter family frequency-hops. The add-on does not try to predict th
 
 If one configured center gets strong packet rates, the reader will keep using it and only scan again when one or more meters go stale.
 
+For narrow low-CPU profiles such as `262144`/`8`, the center frequency matters more than it did during wide local testing. A receiver centered at `911.0 MHz` no longer covers traffic at both `910.5 MHz` and `911.5 MHz`; use `910500000` or `911500000` directly, or let scan mode test both.
+
 The `lock_sample_rate` and `lock_symbol_length` settings should be kept as a matched pair. `rtlamr` uses a 32768 symbols/second data rate, so the usual pairs are:
 
 - `262144` sample rate with symbol length `8`
@@ -130,6 +132,8 @@ If you see repeated `not keeping up with rtl_tcp` messages, compare the reported
 `[R82XX] PLL not locked!` is common during tuner startup or retune. Occasional messages are not a problem by themselves.
 
 If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually set `lock_sample_rate: 262144` and `lock_symbol_length: 8` if it still shows the older `1048576`/`32` or `524288`/`16` pair.
+
+Also check `lock_center_hz`. If it still shows `911000000`, set it to `910500000` and make sure `scan_centers_hz` starts with `910500000` and `911500000`.
 
 ## Troubleshooting
 

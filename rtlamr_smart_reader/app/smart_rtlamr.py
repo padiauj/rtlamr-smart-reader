@@ -23,6 +23,7 @@ import paho.mqtt.client as mqtt
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
+APP_VERSION = "0.2.3"
 
 
 def utc_now_iso(ts: float | None = None) -> str:
@@ -205,7 +206,7 @@ class Config:
         mqtt_password = os.environ.get("MQTT_SERVICE_PASSWORD") or options.get("mqtt_password")
 
         scan_centers = as_int_list(options.get("scan_centers_hz"))
-        lock_center = int(options.get("lock_center_hz", 911000000))
+        lock_center = int(options.get("lock_center_hz", 910500000))
         if lock_center not in scan_centers:
             scan_centers.insert(0, lock_center)
 
@@ -582,7 +583,7 @@ class MqttPublisher:
             "name": meter.name,
             "manufacturer": "Itron/Schlumberger",
             "model": "ERT",
-            "sw_version": "rtlamr-smart-reader 0.2.0",
+            "sw_version": f"rtlamr-smart-reader {APP_VERSION}",
         }
         availability = {
             "availability_topic": self.status_topic,
@@ -823,11 +824,28 @@ class SmartReader:
     def run(self) -> None:
         self.publisher.connect()
         self.publisher.publish_discovery(force=True)
-        self.state.current_center_hz = self.state.current_center_hz or self.config.lock_center_hz
+        self.state.current_center_hz = self.config.lock_center_hz
         self.state.save()
 
         try:
             while not self.stop_event.is_set():
+                never_seen_ids = [
+                    meter_id
+                    for meter_id in self.config.meter_ids
+                    if not self.state.ensure_meter(meter_id).last_seen
+                ]
+                if never_seen_ids:
+                    logging.warning("Meters %s have not been seen yet; starting scan mode", never_seen_ids)
+                    found_center = self.scan_for_meters(never_seen_ids)
+                    if found_center is not None:
+                        self.state.current_center_hz = found_center
+                        self.state.save()
+                        continue
+                    logging.warning(
+                        "Initial scan did not find meters %s; falling back to lock center %.6f MHz",
+                        never_seen_ids,
+                        self.config.lock_center_hz / 1_000_000.0,
+                    )
                 self.state.mode = "lock"
                 reason = self.run_session(
                     center_hz=self.state.current_center_hz,
