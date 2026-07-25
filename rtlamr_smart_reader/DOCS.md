@@ -4,7 +4,7 @@
 
 This add-on runs `rtl_tcp` and `rtlamr` inside Home Assistant OS, decodes configured Itron ERT utility meters, publishes Home Assistant MQTT discovery sensors, and keeps its own raw sample database.
 
-It starts in lock mode at `911.0 MHz`. If any configured meter goes quiet for `stale_seconds`, it enters scan mode and tests the configured center frequencies. It learns per-meter/per-frequency hit rates over time, then chooses the lock center that best covers the configured meters with the fewest frequency changes. Learned state is saved in `/data/rtlamr_smart_state.json`.
+It starts in lock mode at `910.5 MHz`. If any configured meter goes quiet for `stale_seconds`, it enters scan mode and tests the configured center frequencies. It learns per-meter/per-frequency hit rates over time, then chooses the lock center that best covers the configured meters with the fewest frequency changes. Learned state is saved in `/data/rtlamr_smart_state.json`.
 
 ## Requirements
 
@@ -121,17 +121,18 @@ If one configured center gets strong packet rates, the reader will keep using it
 
 For narrow low-CPU profiles such as `262144`/`8`, the center frequency matters more than it did during wide local testing. A receiver centered at `911.0 MHz` no longer covers traffic at both `910.5 MHz` and `911.5 MHz`; use `910500000` or `911500000` directly, or let scan mode test both.
 
-The `lock_sample_rate` and `lock_symbol_length` settings should be kept as a matched pair. `rtlamr` uses a 32768 symbols/second data rate, so the usual pairs are:
+The `lock_sample_rate` and `lock_symbol_length` settings should be kept as a matched pair. `rtlamr` uses a 32768 symbols/second data rate and only accepts specific symbol lengths. The practical pairs for this add-on are:
 
 - `262144` sample rate with symbol length `8`
-- `524288` sample rate with symbol length `16`
 - `1048576` sample rate with symbol length `32`
+
+Do not use `524288` with symbol length `16`; current `rtlamr` rejects `16` as an invalid symbol length.
 
 If you see repeated `not keeping up with rtl_tcp` messages, compare the reported `rate=` to `lock_sample_rate`. A warning near the target rate, such as `260096` when configured for `262144`, is usually harmless. A much lower rate, such as half the target, means the VM is falling behind the SDR stream. The add-on counts only severe overloads, controlled by `overload_min_rate_ratio`, and restarts the receiver after `overload_restart_threshold` severe warnings in one session.
 
 `[R82XX] PLL not locked!` is common during tuner startup or retune. Occasional messages are not a problem by themselves.
 
-If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually set `lock_sample_rate: 262144` and `lock_symbol_length: 8` if it still shows the older `1048576`/`32` or `524288`/`16` pair.
+If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually set `lock_sample_rate: 262144` and `lock_symbol_length: 8` if it still shows the older `1048576`/`32` or `524288`/`16` pair. Version `0.2.4` and newer will fall back to `262144`/`8` when the configured receiver profile is not supported by `rtlamr`.
 
 Also check `lock_center_hz`. If it still shows `911000000`, set it to `910500000` and make sure `scan_centers_hz` starts with `910500000` and `911500000`.
 
@@ -140,6 +141,7 @@ Also check `lock_center_hz`. If it still shows `911000000`, set it to `910500000
 If the add-on cannot open the RTL-SDR:
 
 - Confirm the dongle is passed through to the Home Assistant VM.
+- In the HA SSH terminal, `lsusb` should show a Realtek RTL-SDR device such as `0bda:2838`; seeing only VirtualBox devices means the VM does not have the dongle yet.
 - Stop any other add-on using the same RTL-SDR.
 - Check the add-on log for `rtl_tcp` errors.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4
+
+- Reject unsupported `rtlamr` receiver profiles and fall back to the valid `262144`/`8` profile.
+- Removed stale documentation that suggested the invalid `524288`/`16` profile.
+- Updated add-on text to match the current `910.5 MHz` default.
+
 ## 0.2.3
 
 - Changed the default lock center to `910.5 MHz` and scan order to try `910.5 MHz` and `911.5 MHz` before `911.0 MHz`.

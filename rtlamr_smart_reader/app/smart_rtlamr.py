@@ -23,7 +23,11 @@ import paho.mqtt.client as mqtt
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
-APP_VERSION = "0.2.3"
+APP_VERSION = "0.2.4"
+RTLAMR_SYMBOL_RATE = 32768
+VALID_RTLAMR_SYMBOL_LENGTHS = {8, 32, 40, 48, 56, 64, 72, 80, 88, 96}
+DEFAULT_LOCK_SAMPLE_RATE = 262144
+DEFAULT_LOCK_SYMBOL_LENGTH = 8
 
 
 def utc_now_iso(ts: float | None = None) -> str:
@@ -57,6 +61,26 @@ def unique_preserving_order(values: list[str]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
+
+
+def receiver_profile_from_options(options: dict[str, Any]) -> tuple[int, int]:
+    sample_rate = int(options.get("lock_sample_rate", DEFAULT_LOCK_SAMPLE_RATE))
+    symbol_length = int(options.get("lock_symbol_length", DEFAULT_LOCK_SYMBOL_LENGTH))
+    if (
+        symbol_length in VALID_RTLAMR_SYMBOL_LENGTHS
+        and sample_rate == symbol_length * RTLAMR_SYMBOL_RATE
+    ):
+        return sample_rate, symbol_length
+
+    valid_lengths = ", ".join(str(item) for item in sorted(VALID_RTLAMR_SYMBOL_LENGTHS))
+    print(
+        "Unsupported receiver profile "
+        f"lock_sample_rate={sample_rate} lock_symbol_length={symbol_length}; "
+        f"using {DEFAULT_LOCK_SAMPLE_RATE}/{DEFAULT_LOCK_SYMBOL_LENGTH}. "
+        f"rtlamr supports symbol lengths: {valid_lengths}.",
+        file=sys.stderr,
+    )
+    return DEFAULT_LOCK_SAMPLE_RATE, DEFAULT_LOCK_SYMBOL_LENGTH
 
 
 @dataclass
@@ -209,12 +233,13 @@ class Config:
         lock_center = int(options.get("lock_center_hz", 910500000))
         if lock_center not in scan_centers:
             scan_centers.insert(0, lock_center)
+        lock_sample_rate, lock_symbol_length = receiver_profile_from_options(options)
 
         return cls(
             meters=meters,
             lock_center_hz=lock_center,
-            lock_sample_rate=int(options.get("lock_sample_rate", 262144)),
-            lock_symbol_length=int(options.get("lock_symbol_length", 8)),
+            lock_sample_rate=lock_sample_rate,
+            lock_symbol_length=lock_symbol_length,
             tuner_gain=float(options.get("tuner_gain", 40.2)),
             overload_restart_threshold=int(options.get("overload_restart_threshold", 3)),
             overload_min_rate_ratio=float(options.get("overload_min_rate_ratio", 0.85)),
