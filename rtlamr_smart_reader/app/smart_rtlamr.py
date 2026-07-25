@@ -23,7 +23,7 @@ import paho.mqtt.client as mqtt
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
-APP_VERSION = "0.2.4"
+APP_VERSION = "0.2.5"
 RTLAMR_SYMBOL_RATE = 32768
 VALID_RTLAMR_SYMBOL_LENGTHS = {8, 32, 40, 48, 56, 64, 72, 80, 88, 96}
 DEFAULT_LOCK_SAMPLE_RATE = 262144
@@ -777,7 +777,11 @@ class ProcessSession:
         self.processes.append(rtl_tcp)
         self._start_reader("rtl_tcp_stdout", rtl_tcp.stdout)
         self._start_reader("rtl_tcp_stderr", rtl_tcp.stderr)
-        time.sleep(2.0)
+        if not self._wait_for_rtltcp_ready(rtl_tcp, timeout_seconds=20.0):
+            logging.warning(
+                "rtl_tcp did not report readiness on port %s before starting rtlamr",
+                self.config.rtltcp_port,
+            )
 
         rtlamr_args = [
             "rtlamr",
@@ -802,6 +806,27 @@ class ProcessSession:
         self.processes.append(rtlamr)
         self._start_reader("rtlamr_stdout", rtlamr.stdout)
         self._start_reader("rtlamr_stderr", rtlamr.stderr)
+
+    def _wait_for_rtltcp_ready(self, proc: subprocess.Popen[str], timeout_seconds: float) -> bool:
+        deadline = time.time() + timeout_seconds
+        buffered: list[tuple[str, str]] = []
+        ready = False
+        try:
+            while time.time() < deadline:
+                if proc.poll() is not None:
+                    break
+                try:
+                    source, line = self.lines.get(timeout=0.25)
+                except queue.Empty:
+                    continue
+                buffered.append((source, line))
+                if source == "rtl_tcp_stdout" and "listening" in line.lower():
+                    ready = True
+                    break
+        finally:
+            for item in buffered:
+                self.lines.put(item)
+        return ready
 
     def _start_reader(self, name: str, stream: Any) -> None:
         if stream is None:

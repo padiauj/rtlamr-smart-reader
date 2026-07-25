@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- Wait for `rtl_tcp` to report that it is listening before starting `rtlamr`, avoiding false `receiver connect` failures on slow USB/tuner startup.
+
 ## 0.2.4
 
 - Reject unsupported `rtlamr` receiver profiles and fall back to the valid `262144`/`8` profile.

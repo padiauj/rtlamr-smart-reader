@@ -1,5 +1,5 @@
 name: "RTLAMR Smart Reader"
-version: "0.2.4"
+version: "0.2.5"
 slug: "rtlamr_smart_reader"
 description: "Adaptive RTL-SDR reader for multiple Itron ERT utility meters with MQTT discovery and local sampling."
 url: "https://github.com/padiauj/rtlamr-smart-reader"
