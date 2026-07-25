@@ -1,0 +1,98 @@
+name: "RTLAMR Smart Reader"
+version: "0.2.0"
+slug: "rtlamr_smart_reader"
+description: "Adaptive RTL-SDR reader for multiple Itron ERT utility meters with MQTT discovery and local sampling."
+url: "https://github.com/padiauj/rtlamr-smart-reader"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+stage: experimental
+usb: true
+udev: true
+services:
+  - "mqtt:need"
+options:
+  meters:
+    - id: 0
+      name: "Electric Meter"
+      protocol: "scm"
+      unit_of_measurement: "kWh"
+      device_class: "energy"
+      state_class: "total_increasing"
+      multiplier: 1.0
+      value_round: 3
+      allow_decrease: false
+      max_delta: 1000.0
+      max_rate_per_hour: 1000.0
+      min_confirmations: 2
+      confirmation_window_seconds: 90
+  lock_center_hz: 911000000
+  lock_sample_rate: 1048576
+  lock_symbol_length: 32
+  tuner_gain: 40.2
+  stale_seconds: 300
+  lock_restart_seconds: 3600
+  scan_seconds: 45
+  scan_backoff_seconds: 60
+  scan_centers_hz:
+    - 911000000
+    - 910500000
+    - 911500000
+    - 912500000
+    - 913500000
+    - 914500000
+    - 915500000
+    - 916500000
+    - 917500000
+    - 918500000
+    - 919500000
+  rtltcp_port: 1234
+  sample_interval_seconds: 5
+  retention_days: 1095
+  database_path: "/data/rtlamr_smart_samples.sqlite"
+  store_unchanged_samples: true
+  base_topic: "rtlamr_smart"
+  discovery_prefix: "homeassistant"
+  discovery_interval: 300
+  retain_state: false
+  force_update: true
+  log_level: "info"
+schema:
+  meters:
+    - id: int
+      name: str
+      protocol: str
+      unit_of_measurement: str
+      device_class: str
+      state_class: str
+      multiplier: float
+      value_round: int
+      allow_decrease: bool
+      max_delta: float
+      max_rate_per_hour: float
+      min_confirmations: int
+      confirmation_window_seconds: int
+  lock_center_hz: int
+  lock_sample_rate: int
+  lock_symbol_length: int
+  tuner_gain: float
+  stale_seconds: int
+  lock_restart_seconds: int
+  scan_seconds: int
+  scan_backoff_seconds: int
+  scan_centers_hz:
+    - int
+  rtltcp_port: int
+  sample_interval_seconds: int
+  retention_days: int
+  database_path: str
+  store_unchanged_samples: bool
+  base_topic: str
+  discovery_prefix: str
+  discovery_interval: int
+  retain_state: bool
+  force_update: bool
+  log_level: list(trace|debug|info|warning|error)

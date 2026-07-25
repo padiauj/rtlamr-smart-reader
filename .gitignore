@@ -1,0 +1,11 @@
+.tools/
+dist/
+logs/
+
+__pycache__/
+*.py[cod]
+*.sqlite
+*.sqlite-*
+
+.DS_Store
+Thumbs.db

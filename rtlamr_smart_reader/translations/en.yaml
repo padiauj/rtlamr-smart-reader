@@ -1,0 +1,61 @@
+configuration:
+  meters:
+    name: Meters
+    description: List of ERT endpoint IDs and per-meter reading/filter settings.
+  lock_center_hz:
+    name: Lock center frequency
+    description: Frequency used for normal listening, in Hz.
+  lock_sample_rate:
+    name: Lock sample rate
+    description: RTL-SDR sample rate used by rtl_tcp and rtlamr.
+  lock_symbol_length:
+    name: Symbol length
+    description: rtlamr symbol length used when decoding meter packets.
+  stale_seconds:
+    name: Stale seconds
+    description: Enter scan mode after this many seconds without a confirmed packet from any configured meter.
+  lock_restart_seconds:
+    name: Lock restart seconds
+    description: Restart the lock receiver after this many seconds to keep the SDR session fresh.
+  scan_seconds:
+    name: Scan seconds
+    description: Seconds to dwell on each scan frequency while reacquiring stale meters.
+  scan_backoff_seconds:
+    name: Scan backoff seconds
+    description: Delay before retrying a scan when no stale meter is reacquired.
+  scan_centers_hz:
+    name: Scan centers
+    description: Frequencies to try when reacquiring stale meters.
+  tuner_gain:
+    name: Tuner gain
+    description: RTL-SDR tuner gain in dB.
+  sample_interval_seconds:
+    name: Sample interval
+    description: Seconds between retained SQLite samples and MQTT sample publishes.
+  retention_days:
+    name: Retention days
+    description: Number of days of raw samples to keep in the add-on SQLite database.
+  database_path:
+    name: Database path
+    description: SQLite database path for retained raw samples.
+  store_unchanged_samples:
+    name: Store unchanged samples
+    description: Store every interval even when the accepted reading has not changed.
+  base_topic:
+    name: MQTT base topic
+    description: Base MQTT topic used for state and attributes.
+  discovery_prefix:
+    name: MQTT discovery prefix
+    description: Home Assistant MQTT discovery prefix.
+  discovery_interval:
+    name: Discovery interval
+    description: Seconds between periodic MQTT discovery republishes.
+  retain_state:
+    name: Retain MQTT state
+    description: Retain meter state topics on the MQTT broker.
+  force_update:
+    name: Force update
+    description: Ask Home Assistant to record repeated sensor states.
+  log_level:
+    name: Log level
+    description: Add-on logging verbosity.
