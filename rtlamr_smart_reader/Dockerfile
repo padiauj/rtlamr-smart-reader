@@ -15,7 +15,8 @@ RUN \
     python3 \
     py3-pip \
     rtl-sdr \
-    tar
+    tar \
+    tzdata
 
 COPY requirements.txt /tmp/requirements.txt
 RUN \

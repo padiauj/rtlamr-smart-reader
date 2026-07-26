@@ -1,5 +1,5 @@
 name: "RTLAMR Smart Reader"
-version: "0.2.6"
+version: "0.3.0"
 slug: "rtlamr_smart_reader"
 description: "Adaptive RTL-SDR reader for multiple Itron ERT utility meters with MQTT discovery and local sampling."
 url: "https://github.com/padiauj/rtlamr-smart-reader"
@@ -63,6 +63,22 @@ options:
   discovery_interval: 300
   retain_state: false
   force_update: true
+  daily_report_enabled: false
+  daily_report_time: "06:30"
+  daily_report_timezone: ""
+  daily_report_recipients: []
+  daily_report_sender: ""
+  daily_report_subject_prefix: "RTLAMR Smart Reader"
+  daily_report_month_days: 31
+  daily_report_retry_seconds: 3600
+  daily_report_state_path: "/data/rtlamr_smart_report_state.json"
+  smtp_host: ""
+  smtp_port: 587
+  smtp_username: ""
+  smtp_password: ""
+  smtp_starttls: true
+  smtp_ssl: false
+  smtp_timeout_seconds: 30
   log_level: "info"
 schema:
   meters:
@@ -104,4 +120,21 @@ schema:
   discovery_interval: int
   retain_state: bool
   force_update: bool
+  daily_report_enabled: bool
+  daily_report_time: str
+  daily_report_timezone: str
+  daily_report_recipients:
+    - str
+  daily_report_sender: str
+  daily_report_subject_prefix: str
+  daily_report_month_days: int
+  daily_report_retry_seconds: int
+  daily_report_state_path: str
+  smtp_host: str
+  smtp_port: port
+  smtp_username: str
+  smtp_password: password
+  smtp_starttls: bool
+  smtp_ssl: bool
+  smtp_timeout_seconds: int
   log_level: list(trace|debug|info|warning|error)

@@ -1,1 +1,3 @@
 paho-mqtt>=2.1,<3
+Pillow>=10.4,<12
+tzdata>=2025.2

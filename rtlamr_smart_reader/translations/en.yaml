@@ -71,6 +71,54 @@ configuration:
   force_update:
     name: Force update
     description: Ask Home Assistant to record repeated sensor states.
+  daily_report_enabled:
+    name: Daily email report
+    description: Send one email report per day with usage summaries and plots.
+  daily_report_time:
+    name: Daily report time
+    description: Local HH:MM time to send the report. The report covers the previous completed midnight-to-midnight day.
+  daily_report_timezone:
+    name: Daily report timezone
+    description: Timezone used for report scheduling and midnight day boundaries. Leave blank to use the add-on TZ setting.
+  daily_report_recipients:
+    name: Daily report recipients
+    description: Email addresses that receive the daily usage report.
+  daily_report_sender:
+    name: Daily report sender
+    description: From address used for report emails.
+  daily_report_subject_prefix:
+    name: Daily report subject prefix
+    description: Text prefix used in the email subject line.
+  daily_report_month_days:
+    name: Report month days
+    description: Number of trailing days to include in the daily-usage chart.
+  daily_report_retry_seconds:
+    name: Report retry seconds
+    description: Seconds to wait before retrying after an email delivery failure.
+  daily_report_state_path:
+    name: Report state path
+    description: Path used to remember the last successfully sent report date.
+  smtp_host:
+    name: SMTP host
+    description: Mail server hostname used for daily reports.
+  smtp_port:
+    name: SMTP port
+    description: Mail server port used for daily reports.
+  smtp_username:
+    name: SMTP username
+    description: Optional SMTP login username.
+  smtp_password:
+    name: SMTP password
+    description: Optional SMTP login password or app password.
+  smtp_starttls:
+    name: SMTP STARTTLS
+    description: Upgrade the SMTP connection with STARTTLS after connecting.
+  smtp_ssl:
+    name: SMTP SSL
+    description: Use implicit TLS from the start of the SMTP connection.
+  smtp_timeout_seconds:
+    name: SMTP timeout
+    description: Seconds to wait for SMTP connections and commands.
   log_level:
     name: Log level
     description: Add-on logging verbosity.

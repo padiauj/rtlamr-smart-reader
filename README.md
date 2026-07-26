@@ -4,7 +4,7 @@ Home Assistant add-on for reading Itron/Schlumberger ERT utility meters with an 
 
 ## Add-ons
 
-- `rtlamr_smart_reader`: Adaptive multi-meter `rtlamr` reader with MQTT discovery, stale-triggered frequency scanning, robust sampling, and a local SQLite retention store.
+- `rtlamr_smart_reader`: Adaptive multi-meter `rtlamr` reader with MQTT discovery, stale-triggered frequency scanning, robust sampling, local SQLite retention, and optional daily email usage reports.
 
 ## Install From GitHub
 

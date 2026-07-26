@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Add optional daily SMTP email reports with per-meter summary tables and PNG plots.
+- Schedule reports by local time while summarizing the previous completed midnight-to-midnight day.
+- Include hourly usage, same-day cumulative usage, trailing daily usage, sample counts, stale percentage, and receiver frame-rate health.
+- Retry failed email sends without stopping radio reception, MQTT publishing, or SQLite sampling.
+
 ## 0.2.6
 
 - Detect RTL-SDR USB/tuner failures from `rtl_tcp`, `rtlamr`, and startup logs, then back off and retry instead of treating them as ordinary meter silence.

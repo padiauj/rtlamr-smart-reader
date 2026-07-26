@@ -20,10 +20,12 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from reports import DailyEmailReportConfig, DailyReportScheduler
+
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
-APP_VERSION = "0.2.6"
+APP_VERSION = "0.3.0"
 RTLAMR_SYMBOL_RATE = 32768
 VALID_RTLAMR_SYMBOL_LENGTHS = {8, 32, 40, 48, 56, 64, 72, 80, 88, 96}
 DEFAULT_LOCK_SAMPLE_RATE = 1048576
@@ -179,6 +181,7 @@ class Config:
     mqtt_port: int
     mqtt_username: str | None
     mqtt_password: str | None
+    daily_report: DailyEmailReportConfig
 
     @property
     def meter_ids(self) -> list[int]:
@@ -298,6 +301,7 @@ class Config:
             mqtt_port=mqtt_port,
             mqtt_username=mqtt_username or None,
             mqtt_password=mqtt_password or None,
+            daily_report=DailyEmailReportConfig.from_options(options),
         )
 
 
@@ -1023,13 +1027,20 @@ class SmartReader:
             for center in config.scan_centers_hz:
                 self.state.ensure_center_meter(center, meter_id)
         self.publisher = MqttPublisher(config, self.state)
+        self.report_scheduler = DailyReportScheduler(
+            config.daily_report,
+            config.database_path,
+            config.meters,
+        )
         self.last_sample_tick = 0.0
 
     def stop(self) -> None:
         self.stop_event.set()
 
     def run(self) -> None:
+        self.report_scheduler.start()
         if not self.publisher.connect(self.stop_event):
+            self.report_scheduler.stop()
             return
         self.publisher.publish_discovery(force=True)
         self.state.current_center_hz = self.config.lock_center_hz
@@ -1095,6 +1106,7 @@ class SmartReader:
             self.state.receiver_status = "stopped"
             self.publish_samples(force=True)
             self.state.save()
+            self.report_scheduler.stop()
             self.store.close()
             self.publisher.stop()
 

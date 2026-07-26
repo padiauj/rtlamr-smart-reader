@@ -116,6 +116,45 @@ At 5-second sampling, each meter produces about 17,280 rows per day, 6.3 million
 
 Old rows are pruned hourly based on `retention_days`, which acts as a time-based circular buffer.
 
+## Daily Email Reports
+
+The add-on can send an optional daily email report with one section per configured meter. Reports are disabled by default. When enabled, each report covers the previous completed local calendar day, from midnight to midnight, even if the email is sent the next morning.
+
+Each meter section includes:
+
+- Total usage for the reported day.
+- Start and end cumulative readings.
+- Sample count, stale-sample percentage, and frames-per-minute receiver health.
+- A PNG hourly-usage chart for the reported day.
+- A PNG cumulative-usage chart for the reported day.
+- A PNG daily-usage chart for the trailing `daily_report_month_days` days.
+
+Example:
+
+```yaml
+daily_report_enabled: true
+daily_report_time: "06:30"
+daily_report_timezone: "America/New_York"
+daily_report_recipients:
+  - "you@example.com"
+  - "someone_else@example.com"
+daily_report_sender: "rtlamr@example.com"
+smtp_host: "smtp.example.com"
+smtp_port: 587
+smtp_username: "rtlamr@example.com"
+smtp_password: "your-app-password"
+smtp_starttls: true
+smtp_ssl: false
+```
+
+Use `daily_report_time: "00:05"` for a just-after-midnight report, or a morning time such as `"06:30"` to avoid nuisance overnight email. If the add-on or mail server is unavailable at the scheduled time, it retries every `daily_report_retry_seconds` seconds and remembers the last successfully sent report date in `/data/rtlamr_smart_report_state.json`.
+
+Leave `daily_report_timezone` blank to use the add-on's `TZ` environment setting, or set it explicitly to a timezone such as `America/New_York`.
+
+The report generator reads from the add-on SQLite database and uses accepted retained samples, so the same confirmation and plausibility filters used for Home Assistant state also protect the report calculations. Email failures are logged but do not stop radio reception, MQTT publishing, or SQLite sampling.
+
+To test delivery without waiting until tomorrow, set `daily_report_time` to a time earlier than the current local time and restart the add-on. It will send the previous day's report unless that report date is already marked as sent in `daily_report_state_path`.
+
 ## Spurious Reading Handling
 
 The reader does not store every decoded packet immediately. For each meter it:
