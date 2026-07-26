@@ -17,6 +17,15 @@ configuration:
   lock_restart_seconds:
     name: Lock restart seconds
     description: Restart the lock receiver after this many seconds to keep the SDR session fresh.
+  receiver_startup_timeout_seconds:
+    name: Receiver startup timeout
+    description: Seconds to wait for rtl_tcp to tune before treating startup as failed.
+  receiver_failure_backoff_seconds:
+    name: Receiver failure backoff
+    description: Initial seconds to wait before retrying after USB, tuner, or decoder startup failures.
+  receiver_failure_backoff_max_seconds:
+    name: Maximum receiver backoff
+    description: Maximum seconds to wait between repeated receiver recovery attempts.
   scan_seconds:
     name: Scan seconds
     description: Seconds to dwell on each scan frequency while reacquiring stale meters.

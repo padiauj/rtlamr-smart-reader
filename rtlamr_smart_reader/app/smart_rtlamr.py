@@ -23,11 +23,22 @@ import paho.mqtt.client as mqtt
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
-APP_VERSION = "0.2.5"
+APP_VERSION = "0.2.6"
 RTLAMR_SYMBOL_RATE = 32768
 VALID_RTLAMR_SYMBOL_LENGTHS = {8, 32, 40, 48, 56, 64, 72, 80, 88, 96}
-DEFAULT_LOCK_SAMPLE_RATE = 262144
-DEFAULT_LOCK_SYMBOL_LENGTH = 8
+DEFAULT_LOCK_SAMPLE_RATE = 1048576
+DEFAULT_LOCK_SYMBOL_LENGTH = 32
+DEFAULT_RECEIVER_STARTUP_TIMEOUT_SECONDS = 20
+DEFAULT_RECEIVER_FAILURE_BACKOFF_SECONDS = 10
+DEFAULT_RECEIVER_FAILURE_BACKOFF_MAX_SECONDS = 300
+RECEIVER_FAILURE_RE = re.compile(
+    r"usb_open error|usb_claim_interface|failed to open rtlsdr|"
+    r"no supported tuner|failed to set sample rate|"
+    r"rtlsdr_[a-z_]+ failed|r82xx_init: failed|"
+    r"r82xx_write: i2c wr failed|cb transfer status|library error|"
+    r"receiver connect",
+    re.IGNORECASE,
+)
 
 
 def utc_now_iso(ts: float | None = None) -> str:
@@ -147,6 +158,9 @@ class Config:
     overload_min_rate_ratio: float
     stale_seconds: int
     lock_restart_seconds: int
+    receiver_startup_timeout_seconds: int
+    receiver_failure_backoff_seconds: int
+    receiver_failure_backoff_max_seconds: int
     scan_seconds: int
     scan_backoff_seconds: int
     scan_centers_hz: list[int]
@@ -245,6 +259,27 @@ class Config:
             overload_min_rate_ratio=float(options.get("overload_min_rate_ratio", 0.85)),
             stale_seconds=int(options.get("stale_seconds", 300)),
             lock_restart_seconds=int(options.get("lock_restart_seconds", 3600)),
+            receiver_startup_timeout_seconds=max(
+                1,
+                int(options.get(
+                    "receiver_startup_timeout_seconds",
+                    DEFAULT_RECEIVER_STARTUP_TIMEOUT_SECONDS,
+                )),
+            ),
+            receiver_failure_backoff_seconds=max(
+                1,
+                int(options.get(
+                    "receiver_failure_backoff_seconds",
+                    DEFAULT_RECEIVER_FAILURE_BACKOFF_SECONDS,
+                )),
+            ),
+            receiver_failure_backoff_max_seconds=max(
+                1,
+                int(options.get(
+                    "receiver_failure_backoff_max_seconds",
+                    DEFAULT_RECEIVER_FAILURE_BACKOFF_MAX_SECONDS,
+                )),
+            ),
             scan_seconds=int(options.get("scan_seconds", 45)),
             scan_backoff_seconds=int(options.get("scan_backoff_seconds", 60)),
             scan_centers_hz=scan_centers,
@@ -339,6 +374,7 @@ class MeterRuntime:
     frames_window: deque[float] = field(default_factory=lambda: deque(maxlen=2000))
     last_sample_time: float = 0.0
     last_sample_value: float | None = None
+    last_log_time: float = 0.0
 
     def frames_per_minute(self) -> float:
         now = time.time()
@@ -402,6 +438,11 @@ class RuntimeState:
     center_stats: dict[tuple[int, int], CenterMeterStats] = field(default_factory=dict)
     current_center_hz: int = 0
     mode: str = "starting"
+    receiver_status: str = "starting"
+    last_session_reason: str | None = None
+    last_receiver_error: str | None = None
+    consecutive_receiver_failures: int = 0
+    last_receiver_failure: float = 0.0
     last_state_save: float = 0.0
 
     def ensure_meter(self, meter_id: int) -> MeterRuntime:
@@ -427,6 +468,11 @@ class RuntimeState:
         return {
             "current_center_hz": self.current_center_hz,
             "mode": self.mode,
+            "receiver_status": self.receiver_status,
+            "last_session_reason": self.last_session_reason,
+            "last_receiver_error": self.last_receiver_error,
+            "consecutive_receiver_failures": self.consecutive_receiver_failures,
+            "last_receiver_failure": self.last_receiver_failure,
             "meters": [meter.to_json() for meter in self.meters.values()],
             "center_stats": [stat.to_json() for stat in self.center_stats.values()],
         }
@@ -441,6 +487,11 @@ class RuntimeState:
             state = cls(
                 current_center_hz=int(data.get("current_center_hz", 0)),
                 mode=str(data.get("mode", "starting")),
+                receiver_status=str(data.get("receiver_status", "starting")),
+                last_session_reason=data.get("last_session_reason"),
+                last_receiver_error=data.get("last_receiver_error"),
+                consecutive_receiver_failures=int(data.get("consecutive_receiver_failures", 0)),
+                last_receiver_failure=float(data.get("last_receiver_failure", 0.0)),
             )
             for item in data.get("meters", []):
                 meter = MeterRuntime.from_json(item)
@@ -454,12 +505,15 @@ class RuntimeState:
             return cls()
 
     def save(self) -> None:
-        STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = STATE_PATH.with_suffix(".tmp")
-        with tmp_path.open("w", encoding="utf-8") as handle:
-            json.dump(self.to_json(), handle, indent=2, sort_keys=True)
-        tmp_path.replace(STATE_PATH)
-        self.last_state_save = time.time()
+        try:
+            STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = STATE_PATH.with_suffix(".tmp")
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                json.dump(self.to_json(), handle, indent=2, sort_keys=True)
+            tmp_path.replace(STATE_PATH)
+            self.last_state_save = time.time()
+        except OSError:
+            logging.exception("Could not save runtime state")
 
 
 class SampleStore:
@@ -495,7 +549,10 @@ class SampleStore:
         self.last_prune = 0.0
 
     def close(self) -> None:
-        self.conn.close()
+        try:
+            self.conn.close()
+        except sqlite3.Error:
+            logging.exception("Error while closing sample database")
 
     def insert_sample(self, meter: MeterRuntime, mode: str, stale_seconds: int) -> None:
         if meter.last_reading is None:
@@ -503,41 +560,47 @@ class SampleStore:
         now = time.time()
         packet_age = now - meter.last_seen if meter.last_seen else None
         stale = 1 if packet_age is None or packet_age >= stale_seconds else 0
-        self.conn.execute(
-            """
-            INSERT INTO samples (
-                ts, ts_iso, meter_id, reading, raw_reading, source_packet_ts,
-                source_packet_ts_iso, center_hz, frames_per_minute,
-                packet_age_seconds, stale, mode
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                now,
-                utc_now_iso(now),
-                meter.meter_id,
-                meter.last_reading,
-                meter.last_raw,
-                meter.last_seen or None,
-                meter.last_seen_iso,
-                meter.last_center_hz or None,
-                meter.frames_per_minute(),
-                packet_age,
-                stale,
-                mode,
-            ),
-        )
-        self.conn.commit()
+        try:
+            self.conn.execute(
+                """
+                INSERT INTO samples (
+                    ts, ts_iso, meter_id, reading, raw_reading, source_packet_ts,
+                    source_packet_ts_iso, center_hz, frames_per_minute,
+                    packet_age_seconds, stale, mode
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    now,
+                    utc_now_iso(now),
+                    meter.meter_id,
+                    meter.last_reading,
+                    meter.last_raw,
+                    meter.last_seen or None,
+                    meter.last_seen_iso,
+                    meter.last_center_hz or None,
+                    meter.frames_per_minute(),
+                    packet_age,
+                    stale,
+                    mode,
+                ),
+            )
+            self.conn.commit()
+        except sqlite3.Error:
+            logging.exception("Could not insert sample for meter %s", meter.meter_id)
 
     def prune_if_needed(self) -> None:
         now = time.time()
         if now - self.last_prune < 3600:
             return
         cutoff = now - (self.config.retention_days * 86400)
-        cursor = self.conn.execute("DELETE FROM samples WHERE ts < ?", (cutoff,))
-        self.conn.commit()
-        self.last_prune = now
-        if cursor.rowcount:
-            logging.info("Pruned %s old sample rows", cursor.rowcount)
+        try:
+            cursor = self.conn.execute("DELETE FROM samples WHERE ts < ?", (cutoff,))
+            self.conn.commit()
+            self.last_prune = now
+            if cursor.rowcount:
+                logging.info("Pruned %s old sample rows", cursor.rowcount)
+        except sqlite3.Error:
+            logging.exception("Could not prune old sample rows")
 
 
 class MqttPublisher:
@@ -552,8 +615,11 @@ class MqttPublisher:
             self.client.username_pw_set(config.mqtt_username, config.mqtt_password)
         self.client.will_set(self.status_topic, "offline", retain=True)
         self.client.on_connect = self._on_connect
+        self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
+        self.client.reconnect_delay_set(min_delay=5, max_delay=60)
         self.last_discovery = 0.0
+        self.connected = False
 
     @property
     def status_topic(self) -> str:
@@ -565,10 +631,21 @@ class MqttPublisher:
     def attributes_topic(self, meter_id: int) -> str:
         return f"{self.config.base_topic}/{meter_id}/attributes"
 
-    def connect(self) -> None:
-        logging.info("Connecting to MQTT broker %s:%s", self.config.mqtt_host, self.config.mqtt_port)
-        self.client.connect(self.config.mqtt_host, self.config.mqtt_port, keepalive=60)
-        self.client.loop_start()
+    def connect(self, stop_event: threading.Event | None = None) -> bool:
+        delay = 5
+        while stop_event is None or not stop_event.is_set():
+            try:
+                logging.info("Connecting to MQTT broker %s:%s", self.config.mqtt_host, self.config.mqtt_port)
+                self.client.connect(self.config.mqtt_host, self.config.mqtt_port, keepalive=60)
+                self.client.loop_start()
+                return True
+            except Exception:
+                logging.exception("MQTT connection failed; retrying in %s seconds", delay)
+                deadline = time.time() + delay
+                while (stop_event is None or not stop_event.is_set()) and time.time() < deadline:
+                    time.sleep(0.5)
+                delay = min(delay * 2, 60)
+        return False
 
     def stop(self) -> None:
         try:
@@ -581,12 +658,26 @@ class MqttPublisher:
     def _on_connect(self, client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _properties: Any) -> None:
         code = getattr(reason_code, "value", reason_code)
         if int(code) == 0:
+            self.connected = True
             logging.info("Connected to MQTT")
             client.publish(self.status_topic, "online", retain=True)
             client.subscribe("homeassistant/status")
             self.publish_discovery(force=True)
         else:
             logging.error("MQTT connect failed: %s", reason_code)
+
+    def _on_disconnect(
+        self,
+        _client: mqtt.Client,
+        _userdata: Any,
+        _flags: Any,
+        reason_code: Any,
+        _properties: Any,
+    ) -> None:
+        self.connected = False
+        code = getattr(reason_code, "value", reason_code)
+        if int(code) != 0:
+            logging.warning("MQTT disconnected unexpectedly: %s", reason_code)
 
     def _on_message(self, _client: mqtt.Client, _userdata: Any, message: mqtt.MQTTMessage) -> None:
         if message.topic == "homeassistant/status" and message.payload.decode(errors="ignore") == "online":
@@ -687,6 +778,36 @@ class MqttPublisher:
                 },
             ),
             (
+                "receiver_status",
+                {
+                    "name": "Receiver status",
+                    "unique_id": f"rtlamr_smart_{meter.meter_id}_receiver_status",
+                    "state_topic": self.state_topic(meter.meter_id),
+                    "value_template": "{{ value_json.receiver_status }}",
+                    "entity_category": "diagnostic",
+                },
+            ),
+            (
+                "last_receiver_error",
+                {
+                    "name": "Last receiver error",
+                    "unique_id": f"rtlamr_smart_{meter.meter_id}_last_receiver_error",
+                    "state_topic": self.state_topic(meter.meter_id),
+                    "value_template": "{{ value_json.last_receiver_error }}",
+                    "entity_category": "diagnostic",
+                },
+            ),
+            (
+                "receiver_failures",
+                {
+                    "name": "Receiver failures",
+                    "unique_id": f"rtlamr_smart_{meter.meter_id}_receiver_failures",
+                    "state_topic": self.state_topic(meter.meter_id),
+                    "value_template": "{{ value_json.consecutive_receiver_failures }}",
+                    "entity_category": "diagnostic",
+                },
+            ),
+            (
                 "rejected_packets",
                 {
                     "name": "Rejected packets",
@@ -717,6 +838,10 @@ class MqttPublisher:
             else None,
             "frames_per_minute": round(meter.frames_per_minute(), 1),
             "mode": mode,
+            "receiver_status": self.state.receiver_status,
+            "last_session_reason": self.state.last_session_reason,
+            "last_receiver_error": self.state.last_receiver_error,
+            "consecutive_receiver_failures": self.state.consecutive_receiver_failures,
             "accepted_packets": meter.accepted_packets,
             "rejected_packets": meter.rejected_packets,
             "last_rejected_reason": meter.last_rejected_reason,
@@ -745,12 +870,16 @@ class MqttPublisher:
         self.client.publish(self.attributes_topic(meter_config.meter_id), json.dumps(attrs), retain=False)
 
 
+class ProcessStartError(RuntimeError):
+    pass
+
+
 class ProcessSession:
     def __init__(self, config: Config, center_hz: int):
         self.config = config
         self.center_hz = center_hz
         self.lines: queue.Queue[tuple[str, str]] = queue.Queue()
-        self.processes: list[subprocess.Popen[str]] = []
+        self.processes: list[tuple[str, subprocess.Popen[str]]] = []
 
     def start(self) -> None:
         rtl_tcp_args = [
@@ -774,12 +903,20 @@ class ProcessSession:
             text=True,
             bufsize=1,
         )
-        self.processes.append(rtl_tcp)
+        self.processes.append(("rtl_tcp", rtl_tcp))
         self._start_reader("rtl_tcp_stdout", rtl_tcp.stdout)
         self._start_reader("rtl_tcp_stderr", rtl_tcp.stderr)
-        if not self._wait_for_rtltcp_ready(rtl_tcp, timeout_seconds=20.0):
+        ready, detail = self._wait_for_rtltcp_ready(
+            rtl_tcp,
+            timeout_seconds=self.config.receiver_startup_timeout_seconds,
+        )
+        if not ready:
+            self.stop()
+            raise ProcessStartError(detail)
+        if detail != "listening":
             logging.warning(
-                "rtl_tcp did not report readiness on port %s before starting rtlamr",
+                "rtl_tcp readiness inferred from %s on port %s",
+                detail,
                 self.config.rtltcp_port,
             )
 
@@ -803,30 +940,43 @@ class ProcessSession:
             text=True,
             bufsize=1,
         )
-        self.processes.append(rtlamr)
+        self.processes.append(("rtlamr", rtlamr))
         self._start_reader("rtlamr_stdout", rtlamr.stdout)
         self._start_reader("rtlamr_stderr", rtlamr.stderr)
 
-    def _wait_for_rtltcp_ready(self, proc: subprocess.Popen[str], timeout_seconds: float) -> bool:
+    def _wait_for_rtltcp_ready(self, proc: subprocess.Popen[str], timeout_seconds: float) -> tuple[bool, str]:
+        started = time.time()
         deadline = time.time() + timeout_seconds
         buffered: list[tuple[str, str]] = []
-        ready = False
+        saw_tuned = False
+        saw_gain = False
+        detail = f"rtl_tcp did not become ready within {timeout_seconds:.0f}s"
         try:
             while time.time() < deadline:
                 if proc.poll() is not None:
+                    detail = f"rtl_tcp exited during startup with code {proc.returncode}"
                     break
                 try:
                     source, line = self.lines.get(timeout=0.25)
                 except queue.Empty:
                     continue
                 buffered.append((source, line))
-                if source == "rtl_tcp_stdout" and "listening" in line.lower():
-                    ready = True
-                    break
+                lower = line.lower()
+                if RECEIVER_FAILURE_RE.search(line):
+                    return False, f"rtl_tcp startup error: {line}"
+                if source == "rtl_tcp_stdout" and "listening" in lower:
+                    return True, "listening"
+                if source == "rtl_tcp_stderr":
+                    if "tuned to" in lower:
+                        saw_tuned = True
+                    if "tuner gain set" in lower:
+                        saw_gain = True
+                    if saw_tuned and saw_gain and time.time() - started >= 2.0:
+                        return True, "tuned-and-gain-set"
         finally:
             for item in buffered:
                 self.lines.put(item)
-        return ready
+        return False, detail
 
     def _start_reader(self, name: str, stream: Any) -> None:
         if stream is None:
@@ -843,16 +993,23 @@ class ProcessSession:
         thread.start()
 
     def stop(self) -> None:
-        for proc in reversed(self.processes):
+        for _name, proc in reversed(self.processes):
             if proc.poll() is None:
                 proc.terminate()
         deadline = time.time() + 4.0
-        for proc in reversed(self.processes):
+        for _name, proc in reversed(self.processes):
             while proc.poll() is None and time.time() < deadline:
                 time.sleep(0.1)
             if proc.poll() is None:
                 proc.kill()
         self.processes.clear()
+
+    def exited_process(self) -> tuple[str, int] | None:
+        for name, proc in self.processes:
+            code = proc.poll()
+            if code is not None:
+                return name, code
+        return None
 
 
 class SmartReader:
@@ -872,9 +1029,11 @@ class SmartReader:
         self.stop_event.set()
 
     def run(self) -> None:
-        self.publisher.connect()
+        if not self.publisher.connect(self.stop_event):
+            return
         self.publisher.publish_discovery(force=True)
         self.state.current_center_hz = self.config.lock_center_hz
+        self.state.receiver_status = "starting"
         self.state.save()
 
         try:
@@ -891,6 +1050,9 @@ class SmartReader:
                         self.state.current_center_hz = found_center
                         self.state.save()
                         continue
+                    if self.is_receiver_failure_reason(self.state.last_session_reason):
+                        self.backoff_after_receiver_failure(self.state.last_session_reason or "receiver_failure")
+                        continue
                     logging.warning(
                         "Initial scan did not find meters %s; falling back to lock center %.6f MHz",
                         never_seen_ids,
@@ -902,18 +1064,27 @@ class SmartReader:
                     duration_seconds=self.config.lock_restart_seconds,
                     stale_meter_ids=None,
                 )
+                self.state.last_session_reason = reason
                 if self.stop_event.is_set():
                     break
+                if self.is_receiver_failure_reason(reason):
+                    self.backoff_after_receiver_failure(reason)
+                    continue
                 if reason == "stale":
                     stale_ids = self.state.stale_meter_ids(self.config.meter_ids, self.config.stale_seconds)
                     logging.warning("Stale meters %s; entering scan mode", stale_ids)
                     found_center = self.scan_for_meters(stale_ids)
                     if found_center is None:
-                        logging.warning(
-                            "Scan did not reacquire stale meters; backing off for %s seconds",
-                            self.config.scan_backoff_seconds,
-                        )
-                        self._sleep(self.config.scan_backoff_seconds)
+                        if self.is_receiver_failure_reason(self.state.last_session_reason):
+                            self.backoff_after_receiver_failure(
+                                self.state.last_session_reason or "receiver_failure",
+                            )
+                        else:
+                            logging.warning(
+                                "Scan did not reacquire stale meters; backing off for %s seconds",
+                                self.config.scan_backoff_seconds,
+                            )
+                            self._sleep(self.config.scan_backoff_seconds)
                     else:
                         self.state.current_center_hz = found_center
                         self.state.save()
@@ -921,6 +1092,7 @@ class SmartReader:
                     logging.info("Restarting lock receiver after reason=%s", reason)
         finally:
             self.state.mode = "stopped"
+            self.state.receiver_status = "stopped"
             self.publish_samples(force=True)
             self.state.save()
             self.store.close()
@@ -983,6 +1155,10 @@ class SmartReader:
                 duration_seconds=self.config.scan_seconds,
                 stale_meter_ids=list(wanted),
             )
+            self.state.last_session_reason = reason
+            if self.is_receiver_failure_reason(reason):
+                logging.warning("Scan aborted after receiver failure reason=%s", reason)
+                return None
             new_hits = 0
             found_here: set[int] = set()
             for meter_id in wanted:
@@ -1011,6 +1187,37 @@ class SmartReader:
             return self.best_lock_center(prefer_center=best_center)
         return None
 
+    def is_receiver_failure_reason(self, reason: str | None) -> bool:
+        if not reason:
+            return False
+        return reason in {
+            "startup_failure",
+            "receiver_error",
+            "rtl_tcp_exit",
+            "rtlamr_exit",
+        }
+
+    def is_receiver_failure_line(self, line: str) -> bool:
+        return bool(RECEIVER_FAILURE_RE.search(line))
+
+    def backoff_after_receiver_failure(self, reason: str) -> None:
+        self.state.receiver_status = "recovering"
+        self.state.last_session_reason = reason
+        self.state.consecutive_receiver_failures += 1
+        self.state.last_receiver_failure = time.time()
+        base = self.config.receiver_failure_backoff_seconds
+        maximum = max(base, self.config.receiver_failure_backoff_max_seconds)
+        delay = min(maximum, base * (2 ** (self.state.consecutive_receiver_failures - 1)))
+        logging.warning(
+            "Receiver failure reason=%s count=%s; retrying in %s seconds",
+            reason,
+            self.state.consecutive_receiver_failures,
+            delay,
+        )
+        self.publish_samples(force=True)
+        self.state.save()
+        self._sleep(delay)
+
     def run_session(
         self,
         center_hz: int,
@@ -1024,10 +1231,18 @@ class SmartReader:
         wanted = set(stale_meter_ids or [])
         overload_errors = 0
         self.state.current_center_hz = center_hz
+        self.state.receiver_status = "starting"
         self.publish_samples(force=True)
 
         try:
-            session.start()
+            try:
+                session.start()
+            except ProcessStartError as exc:
+                self.state.receiver_status = "error"
+                self.state.last_receiver_error = str(exc)
+                logging.warning("Receiver startup failed at %.6f MHz: %s", center_hz / 1_000_000.0, exc)
+                return "startup_failure"
+            self.state.receiver_status = "receiving"
             while not self.stop_event.is_set():
                 now = time.time()
                 if duration_seconds > 0 and now - start >= duration_seconds:
@@ -1036,6 +1251,14 @@ class SmartReader:
                     return "stale"
                 if wanted and all(not self.state.ensure_meter(meter_id).is_stale(self.config.stale_seconds) for meter_id in wanted):
                     return "hit"
+                exited = session.exited_process()
+                if exited is not None:
+                    name, code = exited
+                    reason = f"{name}_exit"
+                    self.state.receiver_status = "error"
+                    self.state.last_receiver_error = f"{name} exited with code {code}"
+                    logging.warning("%s exited unexpectedly with code %s", name, code)
+                    return reason
 
                 self.publisher.publish_discovery()
                 self.publish_samples()
@@ -1073,6 +1296,11 @@ class SmartReader:
                             )
                             return "overload"
                         continue
+                    if self.is_receiver_failure_line(line):
+                        self.state.receiver_status = "error"
+                        self.state.last_receiver_error = line
+                        logging.warning("%s receiver failure: %s", source, line)
+                        return "receiver_error"
                     self.log_process_line(source, line)
         finally:
             elapsed = max(0.1, time.time() - start)
@@ -1119,6 +1347,7 @@ class SmartReader:
         raw_reading = int(message.get("Consumption", 0))
         reading = round(raw_reading * meter_config.multiplier, meter_config.value_round)
         now = time.time()
+        previous_reading = runtime.last_reading
 
         reject_reason = self.validate_reading(meter_config, runtime, reading, now)
         if reject_reason:
@@ -1157,6 +1386,9 @@ class SmartReader:
         runtime.pending_raw = None
         runtime.pending_count = 0
         runtime.pending_first_seen = 0.0
+        self.state.receiver_status = "receiving"
+        self.state.last_receiver_error = None
+        self.state.consecutive_receiver_failures = 0
         stat = self.state.ensure_center_meter(center_hz, meter_id)
         stat.last_hit = now
         stat.last_reading = reading
@@ -1164,14 +1396,21 @@ class SmartReader:
         if now - self.state.last_state_save > 30:
             self.state.save()
 
-        logging.info(
-            "Meter %s reading=%s %s center=%.6f MHz frames/min=%.1f",
-            meter_id,
-            reading,
-            meter_config.unit_of_measurement,
-            center_hz / 1_000_000.0,
-            runtime.frames_per_minute(),
+        should_log_info = (
+            previous_reading != reading
+            or runtime.accepted_packets <= 3
+            or now - runtime.last_log_time >= 60
         )
+        if should_log_info:
+            logging.info(
+                "Meter %s reading=%s %s center=%.6f MHz frames/min=%.1f",
+                meter_id,
+                reading,
+                meter_config.unit_of_measurement,
+                center_hz / 1_000_000.0,
+                runtime.frames_per_minute(),
+            )
+            runtime.last_log_time = now
         return reading
 
     def confirm_reading(

@@ -19,8 +19,8 @@ The add-on ships with placeholder meter configuration. Replace `id: 0` with your
 
 - Default protocol: `scm`
 - Lock center: `910500000`
-- Sample rate: `262144`
-- Symbol length: `8`
+- Sample rate: `1048576`
+- Symbol length: `32`
 - Gain: `40.2`
 
 Edit `meters:` in the add-on options for the exact meters you want to track. Remove any placeholder or candidate ID that never appears in the logs, otherwise the reader will keep scanning for it.
@@ -67,9 +67,30 @@ The add-on publishes MQTT discovery for each configured meter:
 - Receiver center frequency
 - Frames per minute
 - Receiver mode
+- Receiver status
+- Last receiver error
+- Consecutive receiver failure count
 - Rejected packet count
 
 The electric default is configured as `device_class: energy` and `state_class: total_increasing`, so it can be used in the Home Assistant Energy dashboard.
+
+## Recovery Behavior
+
+The add-on is designed to keep running through ordinary radio, USB, process, MQTT, and storage failures:
+
+- If a meter goes stale but the receiver is still healthy, the reader enters scan mode and tests the configured centers.
+- If `rtl_tcp` or `rtlamr` exits unexpectedly, the current receiver session is stopped and restarted.
+- If the SDR path reports USB or tuner failures such as `usb_open error`, `rtlsdr_write_reg failed`, `r82xx_init: failed`, `Failed to set sample rate`, or `receiver connect`, the reader classifies the session as a receiver failure instead of a frequency miss.
+- Receiver failures use exponential backoff, starting at `receiver_failure_backoff_seconds` and capped by `receiver_failure_backoff_max_seconds`, so a loose dongle or missing USB passthrough does not hot-loop.
+- A successful confirmed packet clears the consecutive receiver failure count and returns the diagnostic status to `receiving`.
+- MQTT startup connection failures are retried. If MQTT restarts later, the client reconnects and republishes discovery.
+- SQLite insert or prune errors are logged but do not stop radio reception or MQTT publishing.
+
+The receiver recovery options are:
+
+- `receiver_startup_timeout_seconds`: how long to wait for `rtl_tcp` to tune before treating startup as failed.
+- `receiver_failure_backoff_seconds`: initial retry delay after receiver hardware/process failures.
+- `receiver_failure_backoff_max_seconds`: maximum retry delay after repeated receiver failures.
 
 ## Sampling And Storage
 
@@ -119,7 +140,7 @@ The C1SR/R300 meter family frequency-hops. The add-on does not try to predict th
 
 If one configured center gets strong packet rates, the reader will keep using it and only scan again when one or more meters go stale.
 
-For narrow low-CPU profiles such as `262144`/`8`, the center frequency matters more than it did during wide local testing. A receiver centered at `911.0 MHz` no longer covers traffic at both `910.5 MHz` and `911.5 MHz`; use `910500000` or `911500000` directly, or let scan mode test both.
+The default `1048576`/`32` profile is intentionally wider than the lowest-CPU `262144`/`8` profile because it was the profile that reliably decoded the local C1SR meter bank. For narrow low-CPU profiles such as `262144`/`8`, the center frequency matters more than it does with the default. A receiver centered at `911.0 MHz` no longer covers traffic at both `910.5 MHz` and `911.5 MHz`; use `910500000` or `911500000` directly, or let scan mode test both.
 
 The `lock_sample_rate` and `lock_symbol_length` settings should be kept as a matched pair. `rtlamr` uses a 32768 symbols/second data rate and only accepts specific symbol lengths. The practical pairs for this add-on are:
 
@@ -132,7 +153,7 @@ If you see repeated `not keeping up with rtl_tcp` messages, compare the reported
 
 `[R82XX] PLL not locked!` is common during tuner startup or retune. Occasional messages are not a problem by themselves.
 
-If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually set `lock_sample_rate: 262144` and `lock_symbol_length: 8` if it still shows the older `1048576`/`32` or `524288`/`16` pair. Version `0.2.4` and newer will fall back to `262144`/`8` when the configured receiver profile is not supported by `rtlamr`.
+If you upgraded from an earlier add-on version, Home Assistant may keep your previous options. Check the add-on configuration screen and manually use the verified `lock_sample_rate: 1048576` and `lock_symbol_length: 32` profile for the C1SR meter bank. Version `0.2.6` and newer will fall back to `1048576`/`32` when the configured receiver profile is not supported by `rtlamr`.
 
 Also check `lock_center_hz`. If it still shows `911000000`, set it to `910500000` and make sure `scan_centers_hz` starts with `910500000` and `911500000`.
 
