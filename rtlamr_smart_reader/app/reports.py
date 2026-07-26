@@ -100,6 +100,8 @@ class DailyEmailReportConfig:
         report_time, report_time_label = parse_report_time(
             options.get("daily_report_time", DEFAULT_REPORT_TIME)
         )
+        smtp_username = str(options.get("smtp_username", "")).strip()
+        sender = str(options.get("daily_report_sender", "")).strip() or smtp_username
         return cls(
             enabled=bool(options.get("daily_report_enabled", False)),
             report_time=report_time,
@@ -109,10 +111,10 @@ class DailyEmailReportConfig:
                 or DEFAULT_REPORT_TIMEZONE
             ),
             recipients=as_string_list(options.get("daily_report_recipients")),
-            sender=str(options.get("daily_report_sender", "")).strip(),
+            sender=sender,
             smtp_host=str(options.get("smtp_host", "")).strip(),
             smtp_port=int(options.get("smtp_port", 587)),
-            smtp_username=(str(options.get("smtp_username", "")).strip() or None),
+            smtp_username=smtp_username or None,
             smtp_password=(str(options.get("smtp_password", "")).strip() or None),
             smtp_starttls=bool(options.get("smtp_starttls", True)),
             smtp_ssl=bool(options.get("smtp_ssl", False)),

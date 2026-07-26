@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Use `smtp_username` as the daily email report sender when `daily_report_sender` is blank, matching common Gmail SMTP setup.
+
 ## 0.3.0
 
 - Add optional daily SMTP email reports with per-meter summary tables and PNG plots.

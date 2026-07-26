@@ -85,7 +85,7 @@ configuration:
     description: Email addresses that receive the daily usage report.
   daily_report_sender:
     name: Daily report sender
-    description: From address used for report emails.
+    description: From address used for report emails. Leave blank to use the SMTP username.
   daily_report_subject_prefix:
     name: Daily report subject prefix
     description: Text prefix used in the email subject line.

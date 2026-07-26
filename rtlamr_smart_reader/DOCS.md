@@ -138,7 +138,7 @@ daily_report_timezone: "America/New_York"
 daily_report_recipients:
   - "you@example.com"
   - "someone_else@example.com"
-daily_report_sender: "rtlamr@example.com"
+daily_report_sender: ""
 smtp_host: "smtp.example.com"
 smtp_port: 587
 smtp_username: "rtlamr@example.com"
@@ -150,6 +150,8 @@ smtp_ssl: false
 Use `daily_report_time: "00:05"` for a just-after-midnight report, or a morning time such as `"06:30"` to avoid nuisance overnight email. If the add-on or mail server is unavailable at the scheduled time, it retries every `daily_report_retry_seconds` seconds and remembers the last successfully sent report date in `/data/rtlamr_smart_report_state.json`.
 
 Leave `daily_report_timezone` blank to use the add-on's `TZ` environment setting, or set it explicitly to a timezone such as `America/New_York`.
+
+Leave `daily_report_sender` blank to use `smtp_username` as the From address, which is usually what Gmail expects.
 
 The report generator reads from the add-on SQLite database and uses accepted retained samples, so the same confirmation and plausibility filters used for Home Assistant state also protect the report calculations. Email failures are logged but do not stop radio reception, MQTT publishing, or SQLite sampling.
 

@@ -25,7 +25,7 @@ from reports import DailyEmailReportConfig, DailyReportScheduler
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 RTLAMR_SYMBOL_RATE = 32768
 VALID_RTLAMR_SYMBOL_LENGTHS = {8, 32, 40, 48, 56, 64, 72, 80, 88, 96}
 DEFAULT_LOCK_SAMPLE_RATE = 1048576
