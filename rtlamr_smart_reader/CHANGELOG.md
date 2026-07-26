@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Add a Home Assistant ingress dashboard for exploring retained meter samples interactively.
+- Add cumulative-reading range controls for today, 24 hours, 7 days, 30 days, 90 days, 1 year, and all retained samples.
+- Add wheel zoom, drag-to-zoom, hover tooltips, and CSV export for the cumulative reading chart.
+- Add usage bar charts for hourly usage today, daily usage over the last 31 days, and monthly usage over the last 12 months.
+
 ## 0.3.1
 
 - Use `smtp_username` as the daily email report sender when `daily_report_sender` is blank, matching common Gmail SMTP setup.

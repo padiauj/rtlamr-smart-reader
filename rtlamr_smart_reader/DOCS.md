@@ -74,6 +74,19 @@ The add-on publishes MQTT discovery for each configured meter:
 
 The electric default is configured as `device_class: energy` and `state_class: total_increasing`, so it can be used in the Home Assistant Energy dashboard.
 
+## Interactive Dashboard
+
+The add-on exposes a Home Assistant ingress page named **RTLAMR**. Open it from the add-on page or the Home Assistant sidebar to explore retained SQLite samples without leaving Home Assistant.
+
+The dashboard includes:
+
+- Current reading, today usage, last-30-day usage, latest sample time, receiver center, and frames per minute.
+- A cumulative-reading chart with ranges for today, 24 hours, 7 days, 30 days, 90 days, 1 year, and all retained samples.
+- Hover tooltips, mouse-wheel zoom, drag-to-zoom, reset zoom, and CSV export for the selected cumulative range.
+- Usage bar charts for hourly usage today, daily usage over the last 31 days, and monthly usage over the last 12 months.
+
+Long ranges are downsampled by the add-on API before they reach the browser, so the page remains responsive even when the SQLite store contains years of 5-second samples.
+
 ## Recovery Behavior
 
 The add-on is designed to keep running through ordinary radio, USB, process, MQTT, and storage failures:

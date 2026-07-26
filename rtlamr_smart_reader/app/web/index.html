@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RTLAMR Smart Reader</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>RTLAMR Smart Reader</h1>
+          <p id="statusLine">Loading meter data...</p>
+        </div>
+        <label class="meter-picker">
+          <span>Meter</span>
+          <select id="meterSelect"></select>
+        </label>
+      </header>
+
+      <section class="metrics" aria-label="Meter summary">
+        <div class="metric">
+          <span>Current Reading</span>
+          <strong id="metricReading">--</strong>
+        </div>
+        <div class="metric">
+          <span>Today</span>
+          <strong id="metricToday">--</strong>
+        </div>
+        <div class="metric">
+          <span>Last 30 Days</span>
+          <strong id="metricMonth">--</strong>
+        </div>
+        <div class="metric">
+          <span>Frames/Min</span>
+          <strong id="metricFrames">--</strong>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Cumulative Reading</h2>
+            <p id="lineSubtitle">--</p>
+          </div>
+          <div class="controls" id="rangeControls">
+            <button type="button" data-range="today">Today</button>
+            <button type="button" data-range="24h">24H</button>
+            <button type="button" data-range="7d">7D</button>
+            <button type="button" data-range="30d">30D</button>
+            <button type="button" data-range="90d">90D</button>
+            <button type="button" data-range="1y">1Y</button>
+            <button type="button" data-range="all">All</button>
+            <button type="button" id="resetZoom">Reset</button>
+            <a id="downloadCsv" href="api/export.csv">CSV</a>
+          </div>
+        </div>
+        <div class="chart-wrap" id="lineWrap">
+          <canvas id="lineChart" aria-label="Cumulative reading chart"></canvas>
+          <div class="tooltip" id="lineTooltip"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Usage Bars</h2>
+            <p id="barSubtitle">--</p>
+          </div>
+          <div class="controls" id="barControls">
+            <button type="button" data-period="hourly">Hourly</button>
+            <button type="button" data-period="daily">Daily</button>
+            <button type="button" data-period="monthly">Monthly</button>
+          </div>
+        </div>
+        <div class="chart-wrap bar-wrap" id="barWrap">
+          <canvas id="barChart" aria-label="Usage bar chart"></canvas>
+          <div class="tooltip" id="barTooltip"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

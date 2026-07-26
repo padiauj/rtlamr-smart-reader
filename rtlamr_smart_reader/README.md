@@ -8,4 +8,6 @@ It samples the latest confirmed reading every `sample_interval_seconds` seconds,
 
 Optional daily email reports can summarize the previous midnight-to-midnight day with per-meter usage tables and PNG charts for hourly usage, same-day cumulative usage, and trailing daily usage.
 
+The add-on also exposes a Home Assistant ingress dashboard for interactive cumulative-reading charts, usage bars, hover tooltips, zooming, and CSV export.
+
 See `DOCS.md` for installation and configuration details.

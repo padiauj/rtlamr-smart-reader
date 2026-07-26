@@ -20,12 +20,13 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from dashboard import DashboardServer
 from reports import DailyEmailReportConfig, DailyReportScheduler
 
 
 OPTIONS_PATH = Path(os.environ.get("OPTIONS_PATH", "/data/options.json"))
 STATE_PATH = Path(os.environ.get("STATE_PATH", "/data/rtlamr_smart_state.json"))
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.4.0"
 RTLAMR_SYMBOL_RATE = 32768
 VALID_RTLAMR_SYMBOL_LENGTHS = {8, 32, 40, 48, 56, 64, 72, 80, 88, 96}
 DEFAULT_LOCK_SAMPLE_RATE = 1048576
@@ -1032,22 +1033,28 @@ class SmartReader:
             config.database_path,
             config.meters,
         )
+        self.dashboard = DashboardServer(
+            config.database_path,
+            config.meters,
+            self.state,
+            config.daily_report.timezone_name,
+        )
         self.last_sample_tick = 0.0
 
     def stop(self) -> None:
         self.stop_event.set()
 
     def run(self) -> None:
+        self.dashboard.start()
         self.report_scheduler.start()
-        if not self.publisher.connect(self.stop_event):
-            self.report_scheduler.stop()
-            return
-        self.publisher.publish_discovery(force=True)
-        self.state.current_center_hz = self.config.lock_center_hz
-        self.state.receiver_status = "starting"
-        self.state.save()
-
         try:
+            if not self.publisher.connect(self.stop_event):
+                return
+            self.publisher.publish_discovery(force=True)
+            self.state.current_center_hz = self.config.lock_center_hz
+            self.state.receiver_status = "starting"
+            self.state.save()
+
             while not self.stop_event.is_set():
                 never_seen_ids = [
                     meter_id
@@ -1107,6 +1114,7 @@ class SmartReader:
             self.publish_samples(force=True)
             self.state.save()
             self.report_scheduler.stop()
+            self.dashboard.stop()
             self.store.close()
             self.publisher.stop()
 
