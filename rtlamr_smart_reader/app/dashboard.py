@@ -8,6 +8,8 @@ import os
 import sqlite3
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date as dt_date
 from datetime import datetime, time as dt_time, timedelta, timezone, tzinfo
 from http import HTTPStatus
@@ -67,10 +69,14 @@ class DashboardData:
         except ZoneInfoNotFoundError:
             return timezone.utc
 
-    def connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.database_path, timeout=30)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def overview(self) -> dict[str, Any]:
         tz = self.timezone()
@@ -179,18 +185,18 @@ class DashboardData:
                 rows = conn.execute(
                     """
                     WITH bucketed AS (
-                        SELECT CAST((ts - ?) / ? AS INTEGER) AS bucket, MAX(ts) AS max_ts
+                        SELECT meter_id, CAST((ts - ?) / ? AS INTEGER) AS bucket, MAX(ts) AS max_ts
                         FROM samples
                         WHERE meter_id = ? AND ts >= ? AND ts <= ?
-                        GROUP BY bucket
+                        GROUP BY meter_id, bucket
                     )
                     SELECT s.ts, s.reading, s.frames_per_minute, s.stale
-                    FROM samples s
-                    JOIN bucketed b ON s.ts = b.max_ts
-                    WHERE s.meter_id = ?
+                    FROM bucketed b
+                    JOIN samples s INDEXED BY idx_samples_meter_ts
+                      ON s.meter_id = b.meter_id AND s.ts = b.max_ts
                     ORDER BY s.ts
                     """,
-                    (start, bucket_seconds, int(meter.meter_id), start, end, int(meter.meter_id)),
+                    (start, bucket_seconds, int(meter.meter_id), start, end),
                 ).fetchall()
             return {
                 "meter": self._meter_json(meter),

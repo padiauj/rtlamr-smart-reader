@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Fix dashboard cumulative-reading API timeouts by making downsampled queries use the `(meter_id, ts)` index.
+- Pin the ingress dashboard to the Home Assistant sidebar by default.
+
 ## 0.4.0
 
 - Add a Home Assistant ingress dashboard for exploring retained meter samples interactively.
