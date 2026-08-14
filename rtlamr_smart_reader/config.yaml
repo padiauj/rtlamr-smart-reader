@@ -1,5 +1,5 @@
 name: "RTLAMR Smart Reader"
-version: "0.4.1"
+version: "0.4.2"
 slug: "rtlamr_smart_reader"
 description: "Adaptive RTL-SDR reader for multiple Itron ERT utility meters with MQTT discovery and local sampling."
 url: "https://github.com/padiauj/rtlamr-smart-reader"
@@ -16,6 +16,7 @@ ingress_port: 8099
 ingress_panel: true
 panel_icon: "mdi:chart-line"
 panel_title: "RTLAMR"
+homeassistant_api: true
 services:
   - "mqtt:need"
 options:
@@ -77,6 +78,13 @@ options:
   daily_report_month_days: 31
   daily_report_retry_seconds: 3600
   daily_report_state_path: "/data/rtlamr_smart_report_state.json"
+  daily_report_weather_enabled: true
+  weather_latitude: ""
+  weather_longitude: ""
+  weather_temperature_unit: "fahrenheit"
+  weather_degree_day_base_temperature: ""
+  weather_cache_path: "/data/rtlamr_smart_weather_cache.json"
+  weather_api_timeout_seconds: 15
   smtp_host: ""
   smtp_port: 587
   smtp_username: ""
@@ -135,6 +143,13 @@ schema:
   daily_report_month_days: int
   daily_report_retry_seconds: int
   daily_report_state_path: str
+  daily_report_weather_enabled: bool
+  weather_latitude: str
+  weather_longitude: str
+  weather_temperature_unit: list(auto|fahrenheit|celsius)
+  weather_degree_day_base_temperature: str
+  weather_cache_path: str
+  weather_api_timeout_seconds: int
   smtp_host: str
   smtp_port: port
   smtp_username: str

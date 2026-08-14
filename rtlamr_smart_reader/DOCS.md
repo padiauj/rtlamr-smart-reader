@@ -139,8 +139,9 @@ Each meter section includes:
 - Start and end cumulative readings.
 - Sample count, stale-sample percentage, and frames-per-minute receiver health.
 - A PNG hourly-usage chart for the reported day.
-- A PNG cumulative-usage chart for the reported day.
 - A PNG daily-usage chart for the trailing `daily_report_month_days` days.
+- Optional cooling/heating degree-hour bars on the hourly chart.
+- Optional cooling/heating degree-day bars on the trailing daily-usage chart.
 
 Example:
 
@@ -152,6 +153,11 @@ daily_report_recipients:
   - "you@example.com"
   - "someone_else@example.com"
 daily_report_sender: ""
+daily_report_weather_enabled: true
+weather_latitude: ""
+weather_longitude: ""
+weather_temperature_unit: "fahrenheit"
+weather_degree_day_base_temperature: ""
 smtp_host: "smtp.example.com"
 smtp_port: 587
 smtp_username: "rtlamr@example.com"
@@ -165,6 +171,12 @@ Use `daily_report_time: "00:05"` for a just-after-midnight report, or a morning 
 Leave `daily_report_timezone` blank to use the add-on's `TZ` environment setting, or set it explicitly to a timezone such as `America/New_York`.
 
 Leave `daily_report_sender` blank to use `smtp_username` as the From address, which is usually what Gmail expects.
+
+When `daily_report_weather_enabled` is true, the report fetches mean 2-meter air temperature from Open-Meteo. Electric-style meters are paired with cooling degree-days/hours, and gas-style meters are paired with heating degree-days/hours. Leave `weather_latitude` and `weather_longitude` blank to use Home Assistant's configured location through the add-on Home Assistant API proxy. Set both coordinates manually if you want weather from a different spot. `weather_temperature_unit: fahrenheit` is the default; set `auto` to follow Home Assistant's temperature unit when available.
+
+Leave `weather_degree_day_base_temperature` blank for the standard 65 F balance point, or set your own base temperature in the selected `weather_temperature_unit`.
+
+Weather values are cached in `weather_cache_path`. If Home Assistant location lookup or the weather API is unavailable, the email still sends; the charts just omit weather-load bars until data can be fetched again.
 
 The report generator reads from the add-on SQLite database and uses accepted retained samples, so the same confirmation and plausibility filters used for Home Assistant state also protect the report calculations. Email failures are logged but do not stop radio reception, MQTT publishing, or SQLite sampling.
 

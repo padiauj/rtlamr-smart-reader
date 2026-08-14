@@ -98,6 +98,27 @@ configuration:
   daily_report_state_path:
     name: Report state path
     description: Path used to remember the last successfully sent report date.
+  daily_report_weather_enabled:
+    name: Report weather
+    description: Include cooling/heating degree-day and degree-hour weather-load bars in email report charts.
+  weather_latitude:
+    name: Weather latitude
+    description: Optional latitude for weather data. Leave blank to use Home Assistant's configured location.
+  weather_longitude:
+    name: Weather longitude
+    description: Optional longitude for weather data. Leave blank to use Home Assistant's configured location.
+  weather_temperature_unit:
+    name: Weather temperature unit
+    description: Temperature unit used before calculating CDD/HDD. Auto follows Home Assistant when available.
+  weather_degree_day_base_temperature:
+    name: Degree-day base temperature
+    description: Optional CDD/HDD balance point in the selected weather temperature unit. Leave blank for 65 F.
+  weather_cache_path:
+    name: Weather cache path
+    description: Path used to cache fetched mean temperatures.
+  weather_api_timeout_seconds:
+    name: Weather API timeout
+    description: Seconds to wait for Home Assistant location and weather API requests.
   smtp_host:
     name: SMTP host
     description: Mail server hostname used for daily reports.

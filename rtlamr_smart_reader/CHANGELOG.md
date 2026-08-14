@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+- Render daily email report charts with Matplotlib.
+- Add optional Open-Meteo CDD/HDD weather-load bars to hourly and trailing daily usage charts.
+- Auto-detect report weather location from Home Assistant when manual coordinates are blank.
+- Remove the daily cumulative line chart from email reports.
+
 ## 0.4.1
 
 - Fix dashboard cumulative-reading API timeouts by making downsampled queries use the `(meter_id, ts)` index.
