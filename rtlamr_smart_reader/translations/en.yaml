@@ -100,7 +100,7 @@ configuration:
     description: Path used to remember the last successfully sent report date.
   daily_report_weather_enabled:
     name: Report weather
-    description: Include cooling/heating degree-day and degree-hour weather-load bars in email report charts.
+    description: Include cooling/heating degree-day and degree-hour weather-load lines in email report charts.
   weather_latitude:
     name: Weather latitude
     description: Optional latitude for weather data. Leave blank to use Home Assistant's configured location.

@@ -876,16 +876,22 @@ class ChartRenderer:
         right_decimals: int = 0,
         right_value_suffix: str = "",
         weather_label_mode: str = "all",
+        right_style: str = "bar",
     ) -> bytes:
         self._apply_style()
+        if right_style not in {"bar", "line"}:
+            raise ValueError("right_style must be 'bar' or 'line'")
         points = self._meter_grouped_series(labels, left_values, right_values)
         strips = (
             self._strips(points, preferred=self.strip_point_limit)
             if split and len(points) > self.strip_point_limit
             else [points]
         )
+        fig_w = 8.4
+        if len(strips) == 1 and len(points) > self.strip_point_limit:
+            fig_w = min(13.2, 8.4 + (len(points) - self.strip_point_limit) * 0.28)
         fig_h = 5.2 if len(strips) == 1 else 7.8
-        fig, axes = self.plt.subplots(len(strips), 1, figsize=(8.4, fig_h), dpi=220, sharey=False)
+        fig, axes = self.plt.subplots(len(strips), 1, figsize=(fig_w, fig_h), dpi=220, sharey=False)
         if len(strips) == 1:
             axes = [axes]
         fig.text(0.075, 0.97, title, ha="left", va="top", fontsize=22, color="#111111")
@@ -913,16 +919,25 @@ class ChartRenderer:
         label_texts: list[tuple[Any, Any, int]] = []
         for ax, strip in zip(axes, strips):
             ax2 = ax.twinx()
+            ax.set_zorder(ax2.get_zorder() + 1)
+            ax.patch.set_visible(False)
             strip_labels = [item[0] for item in strip]
             strip_left = [item[1] for item in strip]
             strip_right = [item[2] for item in strip]
             xs = list(range(len(strip)))
-            bar_width = 0.34
+            bar_width = 0.34 if right_style == "bar" else 0.58
             bar_offset = bar_width / 2
-            usage_x = [x - bar_offset for x, value in zip(xs, strip_left) if value is not None]
+            usage_x = [
+                (x - bar_offset if right_style == "bar" else x)
+                for x, value in zip(xs, strip_left)
+                if value is not None
+            ]
             usage_y = [value for value in strip_left if value is not None]
-            temp_x = [x + bar_offset for x, value in zip(xs, strip_right) if value is not None]
-            temp_y = [value for value in strip_right if value is not None]
+            right_points = [
+                (x + bar_offset if right_style == "bar" else x, value)
+                for x, value in zip(xs, strip_right)
+                if value is not None
+            ]
             usage_bars = ax.bar(
                 usage_x,
                 usage_y,
@@ -931,14 +946,45 @@ class ChartRenderer:
                 edgecolor=self.edge_color,
                 linewidth=0.6,
             )
-            temp_bars = ax2.bar(
-                temp_x,
-                temp_y,
-                width=bar_width,
-                color=self.weather_color,
-                edgecolor=self.edge_color,
-                linewidth=0.6,
-            )
+            if right_style == "bar":
+                temp_bars = ax2.bar(
+                    [point[0] for point in right_points],
+                    [point[1] for point in right_points],
+                    width=bar_width,
+                    color=self.weather_color,
+                    edgecolor=self.edge_color,
+                    linewidth=0.6,
+                )
+                right_label_points = [
+                    (rect.get_x() + rect.get_width() / 2 + 0.02, value, ax2, value)
+                    for rect, (_x, value) in zip(temp_bars, right_points)
+                ]
+            else:
+                line_points = [
+                    (
+                        x,
+                        self._scale_right_to_left(value, right_max, left_max),
+                        value,
+                    )
+                    for x, value in right_points
+                ]
+                if line_points:
+                    ax.plot(
+                        [point[0] for point in line_points],
+                        [point[1] for point in line_points],
+                        color=self.weather_color,
+                        marker="o",
+                        markeredgecolor=self.edge_color,
+                        markerfacecolor="white",
+                        markeredgewidth=0.6,
+                        markersize=4.8,
+                        linewidth=2.0,
+                        zorder=4,
+                    )
+                right_label_points = [
+                    (x + 0.06, y, ax, value)
+                    for x, y, value in line_points
+                ]
             ax.set_ylim(0, left_max)
             ax2.set_ylim(0, right_max)
             self._set_x_domain(ax, len(strip))
@@ -964,13 +1010,16 @@ class ChartRenderer:
                             va="bottom",
                             fontsize=12,
                             color="#151515",
+                            zorder=5,
                         ),
                         ax,
                         0,
                     )
                 )
-            temp_label_indexes = self._label_indexes(temp_y, weather_label_mode)
-            for idx, (rect, value) in enumerate(zip(temp_bars, temp_y)):
+            right_label_values = [point[3] for point in right_label_points]
+            temp_label_indexes = self._label_indexes(right_label_values, weather_label_mode)
+            for idx, point in enumerate(right_label_points):
+                x, y, label_ax, value = point
                 if value == 0:
                     continue
                 if idx not in temp_label_indexes:
@@ -978,17 +1027,18 @@ class ChartRenderer:
                 label_texts.append(
                     (
                         self._weather_value_label(
-                            ax2,
-                            rect.get_x() + rect.get_width() / 2 + 0.02,
+                            label_ax,
+                            x,
                             self._label_y_above_bar(
-                                ax2,
-                                rect.get_x() + rect.get_width() / 2 + 0.02,
-                                rect.get_height(),
+                                label_ax,
+                                x,
+                                y,
+                                pixels=5.0 if right_style == "line" else 2.0,
                             ),
                             self._fmt(value, decimals=right_decimals),
                             right_value_suffix,
                         ),
-                        ax2,
+                        label_ax,
                         1,
                     )
                 )
@@ -1115,6 +1165,7 @@ class ChartRenderer:
             va="bottom",
             fontsize=7.6,
             color="#7D8590",
+            zorder=5,
         )
 
     def _temperature_bar_label(self, value_label: str, unit_suffix: str) -> str:
@@ -1166,6 +1217,16 @@ class ChartRenderer:
         x_display, y_display = ax.transData.transform((x, y))
         _x_new, y_new = ax.transData.inverted().transform((x_display, y_display + pixels))
         return y_new
+
+    def _scale_right_to_left(
+        self,
+        value: float,
+        right_max: float,
+        left_max: float,
+    ) -> float:
+        if right_max <= 0:
+            return 0.0
+        return value * left_max / right_max
 
     def _style_axes(
         self,
@@ -1237,7 +1298,7 @@ class ChartRenderer:
         if not positive:
             return set()
         by_value = sorted(positive, key=lambda item: item[1])
-        selected = {by_value[-1][0]}
+        selected = {by_value[-1][0], positive[-1][0]}
         if len(by_value) > 1:
             selected.add(by_value[0][0])
         if len(by_value) > 6:
@@ -1310,10 +1371,11 @@ class DailyReportEmailBuilder:
                         f"usage ({meter.unit})",
                         bundle.weather.degree_hours_for(bundle.report_date, driver),
                         f"{labels['hour_abbrev']} ({bundle.weather.degree_unit_label} h)",
-                        split=True,
+                        split=False,
                         right_decimals=0,
                         right_value_suffix=bundle.weather.unit_label,
-                        weather_label_mode="all",
+                        weather_label_mode="selected",
+                        right_style="line",
                     )
                     daily_image = renderer.grouped_bar_chart(
                         f"Daily usage and {labels['day_name']}",
@@ -1323,10 +1385,11 @@ class DailyReportEmailBuilder:
                         f"usage ({meter.unit})",
                         bundle.weather.degree_days_for(meter.month_days, driver),
                         f"{labels['day_abbrev']} ({bundle.weather.degree_unit_label} d)",
-                        split=True,
+                        split=False,
                         right_decimals=0,
                         right_value_suffix=bundle.weather.unit_label,
-                        weather_label_mode="all",
+                        weather_label_mode="selected",
+                        right_style="line",
                     )
                 images.extend(
                     [
@@ -1419,7 +1482,7 @@ class DailyReportEmailBuilder:
                     if cid in image_cids:
                         parts.append(
                             f"<p><img src=\"cid:{cid}\" "
-                            "style=\"max-width:900px;width:100%;height:auto;border:1px solid #e5e7eb\" "
+                            "style=\"max-width:1280px;width:100%;height:auto;border:1px solid #e5e7eb\" "
                             f"alt=\"{html.escape(cid)}\"></p>"
                         )
             else:

@@ -140,8 +140,8 @@ Each meter section includes:
 - Sample count, stale-sample percentage, and frames-per-minute receiver health.
 - A PNG hourly-usage chart for the reported day.
 - A PNG daily-usage chart for the trailing `daily_report_month_days` days.
-- Optional cooling/heating degree-hour bars on the hourly chart.
-- Optional cooling/heating degree-day bars on the trailing daily-usage chart.
+- Optional cooling/heating degree-hour lines on the hourly chart.
+- Optional cooling/heating degree-day lines on the trailing daily-usage chart.
 
 Example:
 
@@ -176,7 +176,7 @@ When `daily_report_weather_enabled` is true, the report fetches mean 2-meter air
 
 Leave `weather_degree_day_base_temperature` blank for the standard 65 F balance point, or set your own base temperature in the selected `weather_temperature_unit`.
 
-Weather values are cached in `weather_cache_path`. If Home Assistant location lookup or the weather API is unavailable, the email still sends; the charts just omit weather-load bars until data can be fetched again.
+Weather values are cached in `weather_cache_path`. If Home Assistant location lookup or the weather API is unavailable, the email still sends; the charts just omit weather-load lines until data can be fetched again.
 
 The report generator reads from the add-on SQLite database and uses accepted retained samples, so the same confirmation and plausibility filters used for Home Assistant state also protect the report calculations. Email failures are logged but do not stop radio reception, MQTT publishing, or SQLite sampling.
 

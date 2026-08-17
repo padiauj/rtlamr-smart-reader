@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3
+
+- Change weather-enabled email report charts to show usage as labeled bars and CDD/HDD as sparse-labeled lines.
+- Keep hourly and trailing daily weather charts on one wider strip instead of splitting them into two rows.
+
 ## 0.4.2
 
 - Render daily email report charts with Matplotlib.
