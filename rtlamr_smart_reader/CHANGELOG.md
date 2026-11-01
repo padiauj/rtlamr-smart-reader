@@ -1,3 +1,8 @@
+## 0.4.4
+
+- Mark usage unavailable when a period lacks continuous fresh meter readings; never attribute outage catch-up readings to the recovery day.
+- Share gap validation between daily reports, historical charts, and dashboard usage bars while preserving raw readings.
+
 # Changelog
 
 ## 0.4.3

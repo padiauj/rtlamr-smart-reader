@@ -8,6 +8,7 @@ import os
 import re
 import smtplib
 import sqlite3
+from usage import period_usage
 import ssl
 import threading
 import time
@@ -654,7 +655,7 @@ class ReportDataStore:
         end_ts = end_local.timestamp()
         start_reading, _ = self._start_reading(conn, int(meter.meter_id), start_ts, end_ts)
         end_reading, _ = self._end_reading(conn, int(meter.meter_id), start_ts, end_ts)
-        usage = self._valid_usage_delta(meter, start_reading, end_reading, 24.0)
+        usage = self._period_usage(conn, meter, start_ts, end_ts, (end_ts - start_ts) / 3600)
         stats = self._daily_stats(conn, int(meter.meter_id), start_ts, end_ts)
 
         hourly_usage: list[float | None] = []
@@ -708,9 +709,7 @@ class ReportDataStore:
         end_ts: float,
         hours: float,
     ) -> float | None:
-        start_reading, _ = self._start_reading(conn, int(meter.meter_id), start_ts, end_ts)
-        end_reading, _ = self._end_reading(conn, int(meter.meter_id), start_ts, end_ts)
-        return self._valid_usage_delta(meter, start_reading, end_reading, hours)
+        return period_usage(conn, meter, start_ts, end_ts, hours)
 
     def _start_reading(
         self,
@@ -1495,7 +1494,7 @@ class DailyReportEmailBuilder:
 
     def _summary_table(self, meter: MeterReport) -> str:
         rows = [
-            ("Usage", f"{compact_number(meter.usage, meter.value_round)} {html.escape(meter.unit)}"),
+            ("Usage", "Unavailable (incomplete reception)" if meter.usage is None else f"{compact_number(meter.usage, meter.value_round)} {html.escape(meter.unit)}"),
             (
                 "Reading range",
                 f"{compact_number(meter.start_reading, meter.value_round)} to "

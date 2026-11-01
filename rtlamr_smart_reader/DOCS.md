@@ -245,3 +245,5 @@ If readings are sparse:
 - Add more center frequencies to `scan_centers_hz`.
 - Try `lock_center_hz: 910500000` or `911500000`.
 - Watch the `Receiver center`, `Frames per minute`, and `Rejected packets` diagnostic sensors for each meter.
+
+Usage totals require fresh samples throughout the period, including its boundaries (within five minutes). Periods with stale samples or reception gaps are unavailable, not zero. The first reading after an outage establishes a new baseline; its catch-up increase is never assigned to the recovery day. Raw cumulative readings remain unchanged. Historical reports and dashboard bars apply the same rule when recalculated.

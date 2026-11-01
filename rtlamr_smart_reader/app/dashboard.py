@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sqlite3
+from usage import period_usage
 import threading
 import time
 from collections.abc import Iterator
@@ -327,19 +328,7 @@ class DashboardData:
         end_ts: float,
         hours: float,
     ) -> float | None:
-        if end_ts <= start_ts:
-            return None
-        start_reading = self._start_reading(conn, int(meter.meter_id), start_ts, end_ts)
-        end_reading = self._end_reading(conn, int(meter.meter_id), start_ts, end_ts)
-        if start_reading is None or end_reading is None:
-            return None
-        delta = end_reading - start_reading
-        if delta < 0 and not bool(getattr(meter, "allow_decrease", False)):
-            return None
-        max_rate = float(getattr(meter, "max_rate_per_hour", -1.0))
-        if max_rate >= 0 and delta > max_rate * max(hours, 1 / 60):
-            return None
-        return round(delta, int(getattr(meter, "value_round", 3)))
+        return period_usage(conn, meter, start_ts, end_ts, hours)
 
     def _start_reading(
         self,
